@@ -88,6 +88,8 @@ int fill_screen(int socket_fd, window_size_t *size, color_t *color)
     }
 
     write(socket_fd, buffer, buffer_index - buffer);
+
+    free(buffer);
 }
 
 void shuffle(position_t *array, int n)
@@ -156,4 +158,7 @@ int fill_screen_noisy(int socket_fd, window_size_t *size, color_t *color)
     }
 
     write(socket_fd, buffer, buffer_index - buffer);
+
+    free(buffer);
+    free(positions);
 }

@@ -13,11 +13,12 @@ typedef struct
 {
     int x;
     int y;
+    color_t color;
+
 } position_t;
 
-int fill_screen(int, window_size_t *, color_t *);
-int fill_screen_noisy(int, window_size_t *, color_t *);
+int fill_window(int socket_fd, window_size_t *size, color_t *color, int noisy);
 
-int read_window_size(int, window_size_t *);
+int read_window_size(int socked_fd, window_size_t *window_size);
 
 #endif

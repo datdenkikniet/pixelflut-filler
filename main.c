@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <getopt.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -45,11 +46,43 @@ int setup_socket(char *remote)
 
 int main(int argc, char *argv[])
 {
-	int sockfd;
-	if (argc > 1)
+	int flags, opt;
+
+	char *remote = NULL;
+	char *color_arg = NULL;
+	int noisy = 0;
+
+	while ((opt = getopt(argc, argv, "hnr:c:")) != -1)
 	{
-		printf("Connecting to %s\n", argv[1]);
-		sockfd = setup_socket(argv[1]);
+		switch (opt)
+		{
+		case 'n':
+			noisy = 1;
+			break;
+		case 'r':
+			remote = optarg;
+			break;
+		case 'c':
+			color_arg = optarg;
+			break;
+		case 'h':
+		default:
+			printf("Usage: %s [options]\n", argv[0]);
+			printf("Options:\n");
+			printf("  -r <addr>  The host to connect to. (Default: 127.0.0.1)\n");
+			printf("  -n              Enable noisy fill.\n");
+			printf("  -c <rrggbb(aa)> The color to fill with in hex, alpha is optional.\n");
+			printf("                  (Default: random value)\n");
+			printf("  -h              Show this help menu and exit.\n");
+			exit(opt != 'h');
+		}
+	}
+
+	int sockfd;
+	if (remote != NULL)
+	{
+		printf("Attempting to connect to %s\n", remote);
+		sockfd = setup_socket(remote);
 	}
 	else
 	{
@@ -60,24 +93,24 @@ int main(int argc, char *argv[])
 	if (sockfd == -1)
 	{
 		printf("Could not create socket.\n");
-		return 1;
+		exit(2);
 	}
 	else if (sockfd == -2)
 	{
 		printf("Invalid remote address\n");
-		return 2;
+		exit(3);
 	}
 	else if (sockfd == -3)
 	{
 		printf("Could not connect to remote\n");
-		return 3;
+		exit(4);
 	}
 
 	char color_buf[9];
 	color_t color;
-	if (argc > 2)
+	if (color_arg != NULL)
 	{
-		int parsed = parse_color(&color, argv[2]);
+		int parsed = parse_color(&color, color_arg);
 
 		if (parsed == 1)
 		{
@@ -103,7 +136,7 @@ int main(int argc, char *argv[])
 	printf("Detected a window with dimensions x: %d, y: %d\n", window.x_width, window.y_height);
 	printf("Filling it with color %s\n", color_buf);
 
-	fill_screen_noisy(sockfd, &window, &color);
+	fill_window(sockfd, &window, &color, noisy);
 
 	close(sockfd);
 

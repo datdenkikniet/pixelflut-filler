@@ -41,9 +41,21 @@ int read_window_size(int socket, window_size_t *size)
         return 0;
     }
 
-    (*size).x_width = strtol(x, NULL, 10);
+    char *endp;
 
-    (*size).y_height = strtol(y, NULL, 10);
+    (*size).x_width = strtol(x, &endp, 10);
+
+    if (*endp != '\0')
+    {
+        return 0;
+    }
+
+    (*size).y_height = strtol(y, &endp, 10);
+
+    if (*endp != '\0')
+    {
+        return 0;
+    }
 
     return 1;
 }

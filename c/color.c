@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "color.h"
 
@@ -28,19 +29,17 @@ color_t generate_random_color()
 
 int from_hex_digit(char digit)
 {
-    if (digit >= 'a' && digit <= 'f')
+    char *endp;
+    int result = strtol(&digit, &endp, 16);
+
+    if (*endp != '\0')
     {
-        return (digit - 'a') + 10;
+        return -1;
     }
-    if (digit >= 'A' && digit <= 'F')
+    else
     {
-        return (digit - 'A') + 10;
+        return result;
     }
-    else if (digit >= '0' && digit <= '9')
-    {
-        return digit - '0';
-    }
-    return -1;
 }
 
 int parse_color(color_t *result, char *input)

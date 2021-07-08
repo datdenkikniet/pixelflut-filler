@@ -1,3 +1,10 @@
-pixelflut-filler:
+FILES := main.c color.h color.c window.c window.h
+
+all: $(FILES) bin
+	gcc -o bin/pixeflut-filler $(FILES)
+
+debug: $(FILES) bin
+	gcc -o bin/pixeflut-filler-debug $(FILES)
+
+bin:
 	mkdir -p bin/
-	gcc -g -o bin/pixeflut-filler main.c color.h color.c window.c window.h

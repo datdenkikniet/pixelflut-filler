@@ -1,3 +1,3 @@
 pixelflut-filler:
 	mkdir -p bin/
-	gcc -o bin/pixeflut-filler main.c
+	gcc -g -o bin/pixeflut-filler main.c color.h color.c window.c window.h

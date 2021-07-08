@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 	}
 	else if (sockfd == -3)
 	{
-		printf("Could not connect to remote");
+		printf("Could not connect to remote\n");
 		return 3;
 	}
 
@@ -136,14 +136,14 @@ int main(int argc, char *argv[])
 		int len = strlen(carg);
 		if (len != 6 && len != 8)
 		{
-			printf("Invalid color (6 or 8 characters).");
+			printf("Invalid color (6 or 8 characters).\n");
 			return 4;
 		}
 		for (int i = 0; i < len; i++)
 		{
 			if ((carg[i] < 'A' && carg[i] > 'F') && (carg[i] < '0' && carg[i] > '9'))
 			{
-				printf("Invalid color (must be upper hex).");
+				printf("Invalid color (must be upper hex).\n");
 				return 5;
 			}
 		}

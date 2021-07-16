@@ -2,7 +2,11 @@ use std::io::Write;
 
 use rand::{prelude::SliceRandom, thread_rng};
 
-use crate::{color::Color, window::Window};
+use crate::{
+    color::Color,
+    letters::{Letter, LETTER_HEIGHT, LETTER_WIDTH},
+    window::Window,
+};
 
 struct Position {
     x: usize,
@@ -63,7 +67,7 @@ impl<'a> From<Window<'a>> for Canvas<'a> {
 impl<'a> Canvas<'a> {
     pub fn new(window: Window<'a>) -> Self {
         let mut vec = Vec::with_capacity(window.get_x() * window.get_y());
-        for _ in 0..window.get_x() * window.get_y() {
+        for _ in 0..(window.get_x() * window.get_y()) {
             vec.push(Pixel::default());
         }
 
@@ -73,26 +77,28 @@ impl<'a> Canvas<'a> {
         }
     }
 
+    fn get_pixel_mut(&mut self, x: usize, y: usize) -> &mut Pixel {
+        let index = self.calc_index(x, y);
+        &mut self.pixels[index]
+    }
+
     pub fn set_pixel(&mut self, x: usize, y: usize, value: &Pixel) {
         self.get_pixel_mut(x, y).copy(value);
     }
 
     #[inline]
     fn calc_index(&self, x: usize, y: usize) -> usize {
-        (x * self.window.get_x()) + y
+        (x * self.window.get_x()) + (y % self.window.get_y())
     }
 
     pub fn get_pixel(&self, x: usize, y: usize) -> &Pixel {
         &self.pixels[self.calc_index(x, y)]
     }
 
-    pub fn get_pixel_mut(&mut self, x: usize, y: usize) -> &mut Pixel {
-        let index = self.calc_index(x, y);
-        &mut self.pixels[index]
-    }
-
-    pub fn fill(&mut self, color: &Pixel) {
-        self.pixels.iter_mut().for_each(|pixel| pixel.copy(color));
+    pub fn fill(&mut self, color: &Color) {
+        self.pixels
+            .iter_mut()
+            .for_each(|pixel| pixel.copy(&Pixel::from_color(color)));
     }
 
     pub fn send_data(&mut self) {
@@ -143,5 +149,16 @@ impl<'a> Canvas<'a> {
 
     pub fn get_window(&self) -> &Window {
         &self.window
+    }
+
+    pub fn draw_letter(&mut self, letter: &Letter, x: usize, y: usize, color: &Color) {
+        for letter_x in 0..LETTER_WIDTH {
+            for letter_y in 0..LETTER_HEIGHT {
+                let pixel = self.get_pixel_mut(x + letter_x, y + letter_y);
+                if letter[(letter_x * LETTER_WIDTH) + LETTER_HEIGHT] == 1 {
+                    pixel.copy(&Pixel::from_color(color));
+                }
+            }
+        }
     }
 }

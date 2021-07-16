@@ -7,7 +7,9 @@ use color::Color;
 mod window;
 use window::Window;
 
-use crate::canvas::{Canvas, Pixel};
+mod letters;
+
+use crate::{canvas::Canvas, letters::LETTER_HEIGHT};
 
 mod canvas;
 
@@ -50,7 +52,12 @@ fn main() -> Result<(), Error> {
     let color = if let Some(color) = opt.color {
         color
     } else {
-        Color::random()
+        Color {
+            r: 0xFF,
+            g: 0x00,
+            b: 0x00,
+            a: Some(0xFF),
+        }
     };
 
     let stream = &mut TcpStream::connect(format!("{}:1337", remote))?;
@@ -64,7 +71,28 @@ fn main() -> Result<(), Error> {
     );
     println!("Filling with color {:x}", color);
 
-    canvas.fill(&Pixel::from_color(&color));
+    canvas.fill(&color);
+
+    let mut start_y = 0;
+    loop {
+        let y = start_y;
+        let x = 0;
+        canvas.draw_letter(
+            &letters::A,
+            x,
+            y,
+            &Color {
+                r: 0xFF,
+                g: 0xFF,
+                b: 0xFF,
+                a: Some(0xFF),
+            },
+        );
+        start_y += LETTER_HEIGHT;
+        if start_y > canvas.get_window().get_y() {
+            break;
+        }
+    }
 
     if opt.noisy {
         canvas.send_data_noisy();

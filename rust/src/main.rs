@@ -1,4 +1,5 @@
-use std::net::TcpStream;
+use rand::{thread_rng, RngCore};
+use std::{net::TcpStream, time::Instant};
 use structopt::StructOpt;
 
 mod color;
@@ -42,6 +43,10 @@ struct Opt {
     /// The remote to connect to
     #[structopt(short, default_value = "127.0.0.1")]
     remote: String,
+
+    /// How many times to draw "change me"
+    #[structopt(short, default_value = "1")]
+    writes: u32,
 }
 
 fn main() -> Result<(), Error> {
@@ -49,11 +54,12 @@ fn main() -> Result<(), Error> {
 
     let remote = opt.remote;
 
-    let color = if let Some(color) = opt.color {
+    let mut fill_color = if let Some(color) = opt.color {
         color
     } else {
         Color::random()
     };
+    fill_color.a = Some(0x0F);
 
     let stream = &mut TcpStream::connect(format!("{}:1337", remote))?;
 
@@ -64,30 +70,31 @@ fn main() -> Result<(), Error> {
         canvas.get_window().get_x(),
         canvas.get_window().get_y()
     );
-    println!("Filling with color {:x}", color);
+    println!("Filling with color {:x}", fill_color);
 
-    canvas.fill(&color);
+    canvas.fill(&fill_color);
 
     let mut offset = 0;
 
-    let letters = [C, H, A, N, G, E, SPACE, M, E];
+    let letters: LetterString = "change me".into();
 
-    for letter in letters {
-        let scale = 10;
-        canvas.draw_letter(
-            &letter,
-            offset,
-            0,
-            &Color {
-                r: 0xFF,
-                g: 0xFF,
-                b: 0xFF,
-                a: Some(0xFF),
-            },
-            scale,
-        );
-        offset += (1 + LETTER_WIDTH) * scale;
+    let rendering = Instant::now();
+
+    for _ in 0..opt.writes {
+        let random_scale = ((thread_rng().next_u32() as usize) % 20) + 2;
+        let random_x = (thread_rng().next_u64() as usize) % canvas.get_window().get_x();
+        let random_y = (thread_rng().next_u64() as usize) % canvas.get_window().get_y();
+        letters.iter().for_each(|letter| {
+            let mut color = Color::random();
+            color.a = Some(0x7F);
+            canvas.draw_letter(&letter, random_x + offset, random_y, &color, random_scale);
+            offset += (1 + LETTER_WIDTH) * random_scale;
+        });
     }
+
+    let rendered = Instant::now();
+
+    println!("{}", (rendered - rendering).as_millis());
 
     if opt.noisy {
         canvas.send_data_noisy();

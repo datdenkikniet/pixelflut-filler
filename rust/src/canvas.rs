@@ -88,7 +88,7 @@ impl<'a> Canvas<'a> {
 
     #[inline]
     fn calc_index(&self, x: usize, y: usize) -> usize {
-        (x * self.window.get_y()) + y
+        ((x % self.window.get_x()) * self.window.get_y()) + (y % self.window.get_y())
     }
 
     pub fn get_pixel(&self, x: usize, y: usize) -> &Pixel {

@@ -2,7 +2,6 @@ pub type Letter = [u8; 35];
 pub const LETTER_HEIGHT: usize = 7;
 pub const LETTER_WIDTH: usize = 5;
 
-pub const LETTERS: [Letter; 8] = [A, B, C, H, N, G, E, M];
 
 /*
 
@@ -15,6 +14,14 @@ pub const X: Letter = [0, 0, 0, 0, 0,
                        0, 0, 0, 0, 0];
 
 */
+
+pub const UNKNOWN: Letter = [1, 1, 1, 1, 1,
+                             1, 1, 1, 1, 1,
+                             1, 1, 1, 1, 1,
+                             1, 1, 1, 1, 1,
+                             1, 1, 1, 1, 1,
+                             1, 1, 1, 1, 1,
+                             1, 1, 1, 1, 1];
 
 pub const SPACE: Letter = [0, 0, 0, 0, 0,
                            0, 0, 0, 0, 0,

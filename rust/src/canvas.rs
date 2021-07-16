@@ -88,7 +88,7 @@ impl<'a> Canvas<'a> {
 
     #[inline]
     fn calc_index(&self, x: usize, y: usize) -> usize {
-        (x * self.window.get_x()) + (y % self.window.get_y())
+        (x * self.window.get_y()) + y
     }
 
     pub fn get_pixel(&self, x: usize, y: usize) -> &Pixel {
@@ -103,8 +103,8 @@ impl<'a> Canvas<'a> {
 
     pub fn send_data(&mut self) {
         let mut all_bytes = Vec::new();
-        for x in 0..self.window.get_x() {
-            for y in 0..self.window.get_y() {
+        for x in 0..self.window.get_x() - 1 {
+            for y in 0..self.window.get_y() - 1 {
                 let pixel = self.get_pixel(x, y);
                 let command = format!(
                     "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
@@ -151,12 +151,26 @@ impl<'a> Canvas<'a> {
         &self.window
     }
 
-    pub fn draw_letter(&mut self, letter: &Letter, x: usize, y: usize, color: &Color) {
+    pub fn draw_letter(
+        &mut self,
+        letter: &Letter,
+        x: usize,
+        y: usize,
+        color: &Color,
+        scale: usize,
+    ) {
         for letter_x in 0..LETTER_WIDTH {
             for letter_y in 0..LETTER_HEIGHT {
-                let pixel = self.get_pixel_mut(x + letter_x, y + letter_y);
-                if letter[(letter_x * LETTER_WIDTH) + LETTER_HEIGHT] == 1 {
-                    pixel.copy(&Pixel::from_color(color));
+                for scale_x in 0..scale {
+                    for scale_y in 0..scale {
+                        let pixel = self.get_pixel_mut(
+                            x + (scale * letter_x) + scale_x,
+                            y + (scale * letter_y) + scale_y,
+                        );
+                        if letter[letter_x + (letter_y * LETTER_WIDTH)] == 1 {
+                            pixel.copy(&Pixel::from_color(color));
+                        }
+                    }
                 }
             }
         }

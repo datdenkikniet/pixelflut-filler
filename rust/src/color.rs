@@ -3,10 +3,10 @@ use std::{fmt::LowerHex, str::FromStr};
 use rand::{thread_rng, RngCore};
 
 pub struct Color {
-    r: u8,
-    g: u8,
-    b: u8,
-    a: Option<u8>,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: Option<u8>,
 }
 
 impl LowerHex for Color {

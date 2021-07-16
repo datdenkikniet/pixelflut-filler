@@ -7,6 +7,10 @@ use color::Color;
 mod window;
 use window::Window;
 
+use crate::canvas::{Canvas, Pixel};
+
+mod canvas;
+
 #[derive(Debug)]
 pub enum Error {
     IoError(std::io::Error),
@@ -42,7 +46,6 @@ fn main() -> Result<(), Error> {
     let opt = Opt::from_args();
 
     let remote = opt.remote;
-    let noisy = opt.noisy;
 
     let color = if let Some(color) = opt.color {
         color
@@ -52,16 +55,22 @@ fn main() -> Result<(), Error> {
 
     let stream = &mut TcpStream::connect(format!("{}:1337", remote))?;
 
-    let mut window = Window::from_stream(stream)?;
+    let mut canvas: Canvas = Window::from_stream(stream)?.into();
 
     println!(
         "Detect screen with dimensions x: {}, y: {}",
-        window.get_x(),
-        window.get_y()
+        canvas.get_window().get_x(),
+        canvas.get_window().get_y()
     );
     println!("Filling with color {:x}", color);
 
-    window.fill(&color, noisy);
+    canvas.fill(&Pixel::from_color(&color));
+
+    if opt.noisy {
+        canvas.send_data_noisy();
+    } else {
+        canvas.send_data();
+    }
 
     Ok(())
 }

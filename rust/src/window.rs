@@ -3,19 +3,12 @@ use std::{
     net::TcpStream,
 };
 
-use rand::{prelude::SliceRandom, thread_rng};
-
-use crate::{color::Color, Error};
+use crate::Error;
 
 pub struct Window<'a> {
     x_width: usize,
     y_height: usize,
     tcp_stream: &'a mut TcpStream,
-}
-
-struct Position {
-    x: usize,
-    y: usize,
 }
 
 impl<'a> Window<'a> {
@@ -67,30 +60,7 @@ impl<'a> Window<'a> {
         }
     }
 
-    pub fn fill(&mut self, color: &Color, shuffle: bool) {
-        let mut positions = Vec::new();
-
-        for x in 0..self.x_width {
-            for y in 0..self.y_height {
-                positions.push(Position { x, y })
-            }
-        }
-
-        if shuffle {
-            positions.shuffle(&mut thread_rng());
-        }
-
-        let mut all_bytes = Vec::new();
-
-        let color_str = format!("{:x}", color);
-
-        for position in positions {
-            let command = format!("PX {} {} {}\n", position.x, position.y, color_str);
-            for byte in command.as_bytes().iter() {
-                all_bytes.push(*byte)
-            }
-        }
-
-        self.tcp_stream.write(all_bytes.as_slice()).ok();
+    pub fn get_tcp_stream(&mut self) -> &mut TcpStream {
+        self.tcp_stream
     }
 }

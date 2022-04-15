@@ -38,7 +38,7 @@ impl<'a> Window<'a> {
         let parts: Vec<&str> = size_result.split(" ").collect();
 
         if parts.len() > 2 {
-            let (x_width, y_height) = match (parts[1].parse(), parts[2].parse()) {
+            let (x_width, y_height) = match (parts[1].trim().parse(), parts[2].trim().parse()) {
                 (Ok(x), Ok(y)) => (x, y),
                 _ => {
                     return Err(Error::SizeParseError(String::from(

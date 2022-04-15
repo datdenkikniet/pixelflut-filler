@@ -64,6 +64,7 @@ impl<'a> From<Window<'a>> for Canvas<'a> {
     }
 }
 
+#[allow(unused)]
 impl<'a> Canvas<'a> {
     pub fn new(window: Window<'a>) -> Self {
         let mut vec = Vec::with_capacity(window.get_x() * window.get_y());

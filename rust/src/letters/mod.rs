@@ -1,5 +1,5 @@
 mod consts;
-use std::{array::IntoIter, slice::Iter};
+use std::slice::Iter;
 
 pub use consts::*;
 
@@ -15,11 +15,14 @@ impl<'a> From<&str> for LetterString<'a> {
                 'a' | 'A' => letters.push(&A),
                 'b' | 'B' => letters.push(&B),
                 'c' | 'C' => letters.push(&C),
+                'd' | 'D' => letters.push(&D),
                 'e' | 'E' => letters.push(&E),
                 'g' | 'G' => letters.push(&G),
                 'h' | 'H' => letters.push(&H),
-                'n' | 'N' => letters.push(&N),
+                'l' | 'L' => letters.push(&L),
                 'm' | 'M' => letters.push(&M),
+                'n' | 'N' => letters.push(&N),
+                'u' | 'U' => letters.push(&U),
                 ' ' => letters.push(&SPACE),
                 _ => letters.push(&UNKNOWN),
             }

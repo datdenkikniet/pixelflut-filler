@@ -37,6 +37,11 @@ impl FromStr for Color {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let len = s.len();
+
+        if len == 1 && s.eq("r") {
+            return Ok(Color::random());
+        }
+
         if len != 6 && len != 8 {
             return Err(String::from("Color must be 6 or 8 characters in length"));
         }

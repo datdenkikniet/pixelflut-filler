@@ -1,3 +1,5 @@
+use crate::{canvas::Pixel, color::Color};
+
 enum PixelCollectorKind {
     Binary,
     Text,
@@ -23,7 +25,20 @@ impl PixelCollector {
         }
     }
 
-    pub fn add_pixel(&mut self, x: u16, y: u16, pixel_data: (u8, u8, u8, u8)) {
+    pub fn add_colored_pixel(&mut self, x: u16, y: u16, color: Color) {
+        let alpha = if let Some(alpha) = color.a {
+            alpha
+        } else {
+            0xFF
+        };
+        self.add_pixel_raw(x, y, (color.r, color.g, color.b, alpha));
+    }
+
+    pub fn add_pixel(&mut self, x: u16, y: u16, pixel: Pixel) {
+        self.add_pixel_raw(x, y, (pixel.r, pixel.g, pixel.b, pixel.a))
+    }
+
+    pub fn add_pixel_raw(&mut self, x: u16, y: u16, pixel_data: (u8, u8, u8, u8)) {
         let (r, g, b, a) = pixel_data;
 
         match self.kind {

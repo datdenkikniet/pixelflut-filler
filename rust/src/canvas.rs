@@ -5,6 +5,7 @@ use rand::{prelude::SliceRandom, thread_rng};
 use crate::{
     color::Color,
     letters::{Letter, LETTER_HEIGHT, LETTER_WIDTH},
+    pixelcollector::PixelCollector,
     window::Window,
 };
 
@@ -14,10 +15,10 @@ struct Position {
 }
 
 pub struct Pixel {
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
 }
 
 impl Default for Pixel {
@@ -111,26 +112,22 @@ where
             .for_each(|pixel| pixel.copy(&Pixel::from_color(color)));
     }
 
-    pub fn send_data(&mut self) {
-        let mut all_bytes = Vec::new();
+    pub fn send_data(&mut self, binary: bool) {
+        let mut pixels = if binary {
+            PixelCollector::new_binary()
+        } else {
+            PixelCollector::new_text()
+        };
         for x in 0..self.window.get_x() - 1 {
             for y in 0..self.window.get_y() - 1 {
                 let pixel = self.get_pixel(x, y);
-                let command = format!(
-                    "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
-                    x, y, pixel.r, pixel.g, pixel.b, pixel.a
-                );
-                for byte in command.as_bytes().iter() {
-                    all_bytes.push(*byte)
-                }
+                pixels.add_pixel_raw(x as u16, y as u16, (pixel.r, pixel.g, pixel.b, pixel.a));
             }
         }
-        self.window.get_stream().write(&all_bytes).ok();
+        self.window.get_stream().write(&pixels.as_bytes()).ok();
     }
 
-    pub fn send_data_noisy(&mut self) {
-        let mut all_bytes = Vec::new();
-
+    pub fn send_data_noisy(&mut self, use_binary_protocol: bool) {
         let mut position_list = Vec::with_capacity(self.window.get_x() * self.get_window().get_y());
 
         for x in 0..self.window.get_x() {
@@ -141,20 +138,23 @@ where
 
         position_list.shuffle(&mut thread_rng());
 
+        let mut pixel_collector = if use_binary_protocol {
+            PixelCollector::new_binary()
+        } else {
+            PixelCollector::new_text()
+        };
+
         for position in position_list {
             let x = position.x;
             let y = position.y;
             let pixel = self.get_pixel(x, y);
-            let command = format!(
-                "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
-                x, y, pixel.r, pixel.g, pixel.b, pixel.a
-            );
-            for byte in command.as_bytes().iter() {
-                all_bytes.push(*byte)
-            }
+            pixel_collector.add_pixel_raw(x as u16, y as u16, (pixel.r, pixel.g, pixel.b, pixel.a));
         }
 
-        self.window.get_stream().write(&all_bytes).ok();
+        self.window
+            .get_stream()
+            .write(&pixel_collector.as_bytes())
+            .ok();
     }
 
     pub fn get_window(&self) -> &Window<T> {

@@ -25,6 +25,7 @@ where
         frame_time: Duration,
         width_offset: usize,
         height_offset: usize,
+        use_binary_protocol: bool,
     ) -> Self {
         let mut frames = Vec::new();
 
@@ -36,13 +37,24 @@ where
         println!("Reading all frames");
 
         let mut frame_number = 0;
-        let mut threads = Vec::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        let start_time = Instant::now();
+
+        let mut active_threads = 0;
         while let Some(frame) = decoder.read_next_frame().unwrap() {
             frames.push(Vec::new());
             let frame = frame.clone();
 
-            threads.push(std::thread::spawn(move || {
-                let mut pixel_collector = PixelCollector::new_binary();
+            active_threads += 1;
+
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                let mut pixel_collector = if use_binary_protocol {
+                    PixelCollector::new_binary()
+                } else {
+                    PixelCollector::new_text()
+                };
 
                 let width = frame.width as usize;
                 let height = frame.height as usize;
@@ -50,27 +62,41 @@ where
                 for y in 0..height {
                     for x in 0..width {
                         let start_pixel = ((y * width) + x) * 4;
-                        let pixel_data = &frame.buffer[start_pixel..start_pixel + 4];
+                        let pd = &frame.buffer[start_pixel..start_pixel + 4];
                         let x = (x + frame.left as usize + width_offset) as u16;
                         let y = (y + frame.top as usize + height_offset) as u16;
 
-                        if pixel_data[3] != 0 {
-                            pixel_collector.add_pixel(x, y, (0, 0, 0, 0x00));
+                        if pd[3] != 0 {
+                            pixel_collector.add_pixel_raw(x, y, (pd[0], pd[1], pd[2], pd[3]));
                         }
                     }
                 }
                 println!("Read frame {}", frame_number);
-                (frame_number, pixel_collector.as_bytes())
-            }));
+
+                tx.send((frame_number, pixel_collector.as_bytes()))
+            });
             frame_number += 1;
+
+            while active_threads >= 16 {
+                let (frame_num, frame) = rx.recv().unwrap();
+                let overwrite = frames.get_mut(frame_num).unwrap();
+                *overwrite = frame;
+                active_threads -= 1;
+            }
         }
 
-        for thread in threads {
-            let (frame_num, frame) = thread.join().unwrap();
-
+        while active_threads > 0 {
+            let (frame_num, frame) = rx.recv().unwrap();
             let overwrite = frames.get_mut(frame_num).unwrap();
             *overwrite = frame;
+            active_threads -= 1;
         }
+
+        println!(
+            "Loaded {} frames in  {} ms",
+            frame_number,
+            Instant::now().duration_since(start_time).as_millis()
+        );
 
         println!("Done reading");
         Self {

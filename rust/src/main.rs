@@ -51,6 +51,10 @@ struct Opt {
     #[structopt(short, default_value = "127.0.0.1")]
     remote: String,
 
+    /// Use the binary protocol
+    #[structopt(short = "b", long)]
+    use_binary_protocol: bool,
+
     /// The command to execute
     #[structopt(subcommand)]
     command: Command,
@@ -127,15 +131,15 @@ fn main() -> Result<(), Error> {
     );
 
     match opt.command {
-        Command::Fill { color } => fill_canvas(canvas, opt.noisy, color),
-        Command::Write(write) => write_text(canvas, opt.noisy, write)?,
-        Command::Gif(gif) => send_gif_loop(canvas, gif),
+        Command::Fill { color } => fill_canvas(canvas, opt.noisy, color, opt.use_binary_protocol),
+        Command::Write(write) => write_text(canvas, opt.noisy, write, opt.use_binary_protocol)?,
+        Command::Gif(gif) => send_gif_loop(canvas, gif, opt.use_binary_protocol),
     }
 
     Ok(())
 }
 
-fn fill_canvas<T>(mut canvas: Canvas<T>, noisy: bool, color: Option<Color>)
+fn fill_canvas<T>(mut canvas: Canvas<T>, noisy: bool, color: Option<Color>, use_bin_protocol: bool)
 where
     T: Read + Write,
 {
@@ -150,13 +154,20 @@ where
     canvas.fill(&fill_color);
 
     if noisy {
-        canvas.send_data_noisy();
+        canvas.send_data_noisy(use_bin_protocol);
     } else {
-        canvas.send_data();
+        canvas.send_data(use_bin_protocol);
     }
+
+    canvas.window.get_stream().flush().ok();
 }
 
-fn write_text<T>(mut canvas: Canvas<T>, noisy: bool, write: WriteCommand) -> Result<(), Error>
+fn write_text<T>(
+    mut canvas: Canvas<T>,
+    noisy: bool,
+    write: WriteCommand,
+    use_bin_protocol: bool,
+) -> Result<(), Error>
 where
     T: Read + Write,
 {
@@ -201,14 +212,14 @@ where
     }
 
     if noisy {
-        canvas.send_data_noisy();
+        canvas.send_data_noisy(use_bin_protocol);
     } else {
-        canvas.send_data();
+        canvas.send_data(use_bin_protocol);
     }
     Ok(())
 }
 
-fn send_gif_loop<T>(canvas: Canvas<T>, gif: GifCommand)
+fn send_gif_loop<T>(canvas: Canvas<T>, gif: GifCommand, use_binary_protocol: bool)
 where
     T: Read + Write,
 {
@@ -220,6 +231,7 @@ where
         frame_time,
         gif.width_offset,
         gif.height_offset,
+        use_binary_protocol,
     );
     gif.send_continuous();
 }

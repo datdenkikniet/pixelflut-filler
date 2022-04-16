@@ -1,19 +1,26 @@
 use std::{
-    io::Write,
-    net::TcpStream,
+    io::{Read, Write},
     path::PathBuf,
     time::{Duration, Instant},
 };
 
-pub struct Gif {
-    stream: TcpStream,
+use crate::{canvas::Canvas, pixelcollector::PixelCollector};
+
+pub struct Gif<T>
+where
+    T: Read + Write,
+{
+    canvas: Canvas<T>,
     frame_time: Duration,
-    frames: Vec<String>,
+    frames: Vec<Vec<u8>>,
 }
 
-impl Gif {
+impl<T> Gif<T>
+where
+    T: Read + Write,
+{
     pub fn new_with(
-        stream: TcpStream,
+        canvas: Canvas<T>,
         path: PathBuf,
         frame_time: Duration,
         width_offset: usize,
@@ -31,31 +38,29 @@ impl Gif {
         let mut frame_number = 0;
         let mut threads = Vec::new();
         while let Some(frame) = decoder.read_next_frame().unwrap() {
-            frames.push(String::new());
+            frames.push(Vec::new());
             let frame = frame.clone();
 
             threads.push(std::thread::spawn(move || {
+                let mut pixel_collector = PixelCollector::new_binary();
+
                 let width = frame.width as usize;
                 let height = frame.height as usize;
 
-                let mut string = String::new();
                 for y in 0..height {
                     for x in 0..width {
                         let start_pixel = ((y * width) + x) * 4;
                         let pixel_data = &frame.buffer[start_pixel..start_pixel + 4];
-                        string.push_str(&format!(
-                            "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
-                            x + frame.left as usize + width_offset,
-                            y + frame.top as usize + height_offset,
-                            pixel_data[0],
-                            pixel_data[1],
-                            pixel_data[2],
-                            pixel_data[3]
-                        ))
+                        let x = (x + frame.left as usize + width_offset) as u16;
+                        let y = (y + frame.top as usize + height_offset) as u16;
+
+                        if pixel_data[3] != 0 {
+                            pixel_collector.add_pixel(x, y, (0, 0, 0, 0x00));
+                        }
                     }
                 }
                 println!("Read frame {}", frame_number);
-                (frame_number, string)
+                (frame_number, pixel_collector.as_bytes())
             }));
             frame_number += 1;
         }
@@ -71,17 +76,17 @@ impl Gif {
         Self {
             frames,
             frame_time,
-            stream,
+            canvas,
         }
     }
 
     pub fn send_continuous(&mut self) {
         loop {
             let frames = self.frames.iter();
-            let stream = &mut self.stream;
+            let stream = &mut self.canvas.window.get_stream();
             for frame in frames {
                 let start_time = Instant::now();
-                stream.write(frame.as_bytes()).ok();
+                stream.write(frame).unwrap();
                 let end_time = Instant::now();
                 let frame_duration = end_time - start_time;
                 if frame_duration < self.frame_time {

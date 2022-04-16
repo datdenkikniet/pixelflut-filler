@@ -1,17 +1,20 @@
-use std::{
-    io::{Read, Write},
-    net::TcpStream,
-};
+use std::io::{Read, Write};
 
 use crate::Error;
 
-pub struct Window<'a> {
+pub struct Window<T>
+where
+    T: Read + Write,
+{
     x_width: usize,
     y_height: usize,
-    tcp_stream: &'a mut TcpStream,
+    stream: T,
 }
 
-impl<'a> Window<'a> {
+impl<T> Window<T>
+where
+    T: Read + Write,
+{
     pub fn get_x(&self) -> usize {
         self.x_width
     }
@@ -20,12 +23,17 @@ impl<'a> Window<'a> {
         self.y_height
     }
 
-    pub fn from_stream(tcp_stream: &'a mut TcpStream) -> Result<Self, Error> {
-        tcp_stream.write("SIZE\n".as_bytes())?;
+    pub fn get_stream(&mut self) -> &mut T {
+        &mut self.stream
+    }
 
+    pub fn from_stream(mut stream: T) -> Result<Self, Error> {
+        stream.write("SIZE\n".as_bytes())?;
         let result = &mut [0u8; 128];
 
-        let len = tcp_stream.read(result)?;
+        let len = stream.read(result)?;
+
+        println!("{}", len);
 
         let mut size_result = if let Ok(result) = String::from_utf8((&result[..len]).to_vec()) {
             result
@@ -34,6 +42,12 @@ impl<'a> Window<'a> {
         };
 
         size_result.pop();
+
+        let size_result = if size_result.ends_with('\r') {
+            &size_result[..size_result.len() - 1]
+        } else {
+            &size_result
+        };
 
         let parts: Vec<&str> = size_result.split(" ").collect();
 
@@ -50,7 +64,7 @@ impl<'a> Window<'a> {
             let window_size = Window {
                 x_width,
                 y_height,
-                tcp_stream,
+                stream,
             };
             Ok(window_size)
         } else {
@@ -58,9 +72,5 @@ impl<'a> Window<'a> {
                 "Did not receive enough parts.",
             )))
         }
-    }
-
-    pub fn get_tcp_stream(&mut self) -> &mut TcpStream {
-        self.tcp_stream
     }
 }

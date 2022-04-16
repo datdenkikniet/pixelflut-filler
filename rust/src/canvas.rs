@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 
 use rand::{prelude::SliceRandom, thread_rng};
 
@@ -53,20 +53,29 @@ impl Pixel {
     }
 }
 
-pub struct Canvas<'a> {
-    window: Window<'a>,
+pub struct Canvas<T>
+where
+    T: Read + Write,
+{
+    pub window: Window<T>,
     pixels: Vec<Pixel>,
 }
 
-impl<'a> From<Window<'a>> for Canvas<'a> {
-    fn from(window: Window<'a>) -> Self {
+impl<T> From<Window<T>> for Canvas<T>
+where
+    T: Read + Write,
+{
+    fn from(window: Window<T>) -> Self {
         Self::new(window)
     }
 }
 
 #[allow(unused)]
-impl<'a> Canvas<'a> {
-    pub fn new(window: Window<'a>) -> Self {
+impl<T> Canvas<T>
+where
+    T: Read + Write,
+{
+    pub fn new(window: Window<T>) -> Self {
         let mut vec = Vec::with_capacity(window.get_x() * window.get_y());
         for _ in 0..(window.get_x() * window.get_y()) {
             vec.push(Pixel::default());
@@ -116,7 +125,7 @@ impl<'a> Canvas<'a> {
                 }
             }
         }
-        self.window.get_tcp_stream().write(&all_bytes).ok();
+        self.window.get_stream().write(&all_bytes).ok();
     }
 
     pub fn send_data_noisy(&mut self) {
@@ -145,10 +154,10 @@ impl<'a> Canvas<'a> {
             }
         }
 
-        self.window.get_tcp_stream().write(&all_bytes).ok();
+        self.window.get_stream().write(&all_bytes).ok();
     }
 
-    pub fn get_window(&self) -> &Window {
+    pub fn get_window(&self) -> &Window<T> {
         &self.window
     }
 

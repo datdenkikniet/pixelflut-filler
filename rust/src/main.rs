@@ -1,8 +1,14 @@
 use rand::{thread_rng, RngCore};
-use std::{net::TcpStream, path::PathBuf, time::Duration};
+use std::{
+    io::{Read, Write},
+    net::TcpStream,
+    path::PathBuf,
+    time::Duration,
+};
 use structopt::StructOpt;
 
 mod color;
+mod pixelcollector;
 use color::Color;
 
 mod window;
@@ -55,13 +61,13 @@ enum Command {
     /// Fill the screen with a specific color
     Fill { color: Option<Color> },
     /// Write some text to the screen
-    Write(Write),
+    Write(WriteCommand),
     /// Send a gif, repeatedly
-    Gif(Gif),
+    Gif(GifCommand),
 }
 
 #[derive(StructOpt)]
-struct Write {
+struct WriteCommand {
     /// How many times to write the text at random coordinates
     /// and a scaling between 5 and 20 (only valid if 'scale',
     /// 'x' and 'y' are not set)
@@ -91,7 +97,7 @@ struct Write {
 }
 
 #[derive(StructOpt)]
-struct Gif {
+struct GifCommand {
     /// The file name of the GIF to send
     file_name: PathBuf,
     /// The target frame time (in milliseconds)
@@ -110,9 +116,9 @@ fn main() -> Result<(), Error> {
 
     let remote = opt.remote;
 
-    let mut stream = TcpStream::connect(format!("{}:1337", remote))?;
+    let stream = TcpStream::connect(format!("{}:1337", remote))?;
 
-    let canvas: &mut Canvas = &mut Window::from_stream(&mut stream)?.into();
+    let canvas: Canvas<_> = Window::from_stream(stream)?.into();
 
     println!(
         "Detect screen with dimensions x: {}, y: {}",
@@ -123,13 +129,16 @@ fn main() -> Result<(), Error> {
     match opt.command {
         Command::Fill { color } => fill_canvas(canvas, opt.noisy, color),
         Command::Write(write) => write_text(canvas, opt.noisy, write)?,
-        Command::Gif(gif) => send_gif_loop(stream, gif),
+        Command::Gif(gif) => send_gif_loop(canvas, gif),
     }
 
     Ok(())
 }
 
-fn fill_canvas(canvas: &mut Canvas, noisy: bool, color: Option<Color>) {
+fn fill_canvas<T>(mut canvas: Canvas<T>, noisy: bool, color: Option<Color>)
+where
+    T: Read + Write,
+{
     let fill_color = if let Some(color) = color {
         color
     } else {
@@ -147,7 +156,10 @@ fn fill_canvas(canvas: &mut Canvas, noisy: bool, color: Option<Color>) {
     }
 }
 
-fn write_text(canvas: &mut Canvas, noisy: bool, write: Write) -> Result<(), Error> {
+fn write_text<T>(mut canvas: Canvas<T>, noisy: bool, write: WriteCommand) -> Result<(), Error>
+where
+    T: Read + Write,
+{
     let iterations = match (&write.x, &write.y, &write.scale, &write.writes) {
         (Some(..), Some(..), Some(..), None) => 1,
         (None, None, None, Some(writes)) => *writes,
@@ -196,11 +208,14 @@ fn write_text(canvas: &mut Canvas, noisy: bool, write: Write) -> Result<(), Erro
     Ok(())
 }
 
-fn send_gif_loop(stream: TcpStream, gif: Gif) {
-    let frame_time = Duration::from_millis(gif.frame_time);
+fn send_gif_loop<T>(canvas: Canvas<T>, gif: GifCommand)
+where
+    T: Read + Write,
+{
+    let frame_time = Duration::from_micros(gif.frame_time);
 
     let mut gif = gif::Gif::new_with(
-        stream,
+        canvas,
         gif.file_name,
         frame_time,
         gif.width_offset,

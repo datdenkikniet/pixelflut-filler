@@ -44,7 +44,7 @@ impl PixelCollector {
         match self.kind {
             PixelCollectorKind::Binary => {
                 let data = &mut self.data;
-                data.extend_from_slice(b"PXB ");
+                data.extend_from_slice(b"PB");
 
                 x.to_le_bytes().iter().for_each(|b| data.push(*b));
                 y.to_le_bytes().iter().for_each(|b| data.push(*b));
@@ -53,7 +53,6 @@ impl PixelCollector {
                 data.push(g);
                 data.push(b);
                 data.push(a);
-                data.push(b'\n');
             }
             PixelCollectorKind::Text => {
                 self.data.extend_from_slice(

@@ -1,4 +1,5 @@
 use rand::{thread_rng, RngCore};
+use snake::Snake;
 use std::{
     io::{Read, Write},
     net::TcpStream,
@@ -9,6 +10,7 @@ use structopt::StructOpt;
 
 mod color;
 mod pixelcollector;
+mod snake;
 use color::Color;
 
 mod window;
@@ -68,6 +70,8 @@ enum Command {
     Write(WriteCommand),
     /// Send a gif, repeatedly
     Gif(GifCommand),
+    /// Create a snake that wiggles along the screen
+    Snake,
 }
 
 #[derive(StructOpt)]
@@ -134,6 +138,7 @@ fn main() -> Result<(), Error> {
         Command::Fill { color } => fill_canvas(canvas, opt.noisy, color, opt.use_binary_protocol),
         Command::Write(write) => write_text(canvas, opt.noisy, write, opt.use_binary_protocol)?,
         Command::Gif(gif) => send_gif_loop(canvas, gif, opt.use_binary_protocol),
+        Command::Snake => snake(canvas),
     }
 
     Ok(())
@@ -234,4 +239,13 @@ where
         use_binary_protocol,
     );
     gif.send_continuous();
+}
+
+fn snake<T>(canvas: Canvas<T>)
+where
+    T: Read + Write,
+{
+    let snake = Snake::new(canvas);
+
+    snake.run();
 }

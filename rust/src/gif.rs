@@ -4,6 +4,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+use zstd::{
+    stream::raw::{Encoder, Operation},
+    zstd_safe::{InBuffer, OutBuffer},
+};
+
 use crate::{canvas::Canvas, pixelcollector::PixelCollector};
 
 pub struct Gif<T>
@@ -66,9 +71,9 @@ where
                         let x = (x + frame.left as usize + width_offset) as u16;
                         let y = (y + frame.top as usize + height_offset) as u16;
 
-                        if pd[3] != 0 {
-                            pixel_collector.add_pixel_raw(x, y, (pd[0], pd[1], pd[2], pd[3]));
-                        }
+                        // if pd[3] != 0 {
+                        pixel_collector.add_pixel_raw(x, y, (pd[0], pd[1], pd[2], pd[3]));
+                        // }
                     }
                 }
                 println!("Read frame {}", frame_number);
@@ -107,17 +112,54 @@ where
     }
 
     pub fn send_continuous(&mut self) {
+        let stream = self.canvas.window.get_stream();
+
+        let compress = true;
+
+        if compress {
+            stream.write(b"COMPRESS\n").ok();
+
+            let mut compress = [0u8; 9];
+            stream.read_exact(&mut compress).ok();
+            println!("{}", std::str::from_utf8(&compress).unwrap());
+        }
+
+        let mut compressed_bytes = 0.0;
+        let mut uncompressed_bytes = 0.0;
+
+        let mut frame_num = 0;
+
         loop {
             let frames = self.frames.iter();
-            let stream = &mut self.canvas.window.get_stream();
             for frame in frames {
+                uncompressed_bytes += frame.len() as f64;
                 let start_time = Instant::now();
-                stream.write(frame).unwrap();
+                if compress {
+                    let in_buffer = &mut InBuffer::around(&frame);
+                    let out = &mut vec![0u8; frame.len() + 1024];
+                    let out_buffer = &mut OutBuffer::around(out);
+                    let mut encoder = Encoder::new(1).unwrap();
+
+                    encoder.run(in_buffer, out_buffer).ok();
+                    encoder.finish(out_buffer, true).ok();
+
+                    compressed_bytes += out_buffer.as_slice().len() as f64;
+
+                    stream.write(out_buffer.as_slice()).unwrap();
+                } else {
+                    compressed_bytes += frame.len() as f64;
+                    stream.write(frame).unwrap();
+                };
+
                 let end_time = Instant::now();
+
+                println!("Ratio: {}", uncompressed_bytes / compressed_bytes);
                 let frame_duration = end_time - start_time;
                 if frame_duration < self.frame_time {
                     std::thread::sleep(self.frame_time - frame_duration);
                 }
+                println!("Frame: {}", frame_num);
+                frame_num += 1;
             }
         }
     }

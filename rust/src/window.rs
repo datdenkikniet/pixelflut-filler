@@ -31,9 +31,9 @@ where
         stream.write("SIZE\n".as_bytes())?;
         let result = &mut [0u8; 128];
 
-        let len = stream.read(result)?;
+        std::thread::sleep(std::time::Duration::from_millis(500));
 
-        println!("{}", len);
+        let len = stream.read(result)?;
 
         let mut size_result = if let Ok(result) = String::from_utf8((&result[..len]).to_vec()) {
             result

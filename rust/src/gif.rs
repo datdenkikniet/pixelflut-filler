@@ -51,6 +51,25 @@ where
         let mut out_bytes = 0;
         let mut active_threads = 0;
 
+        macro_rules! take_frame {
+            ($max: literal) => {
+                while active_threads > $max {
+                    let (frame_num, (actual_size, frame)) = rx.recv().unwrap();
+                    let overwrite = frames.get_mut(frame_num).unwrap();
+                    uncompressed_bytes += actual_size;
+                    let len = frame.len();
+                    out_bytes += frame.len();
+                    *overwrite = frame;
+                    active_threads -= 1;
+                    println!(
+                        "Finished frame {}. Ratio: {:.02}",
+                        frame_num,
+                        (actual_size as f64) / (len as f64)
+                    );
+                }
+            };
+        }
+
         while let Some(frame) = decoder.read_next_frame().unwrap() {
             frames.push(Vec::new());
             let frame = frame.clone();
@@ -76,37 +95,21 @@ where
                         let x = (x + frame.left as usize + width_offset) as u16;
                         let y = (y + frame.top as usize + height_offset) as u16;
 
-                        pixel_collector.add_pixel_raw(x, y, (pd[0], pd[1], pd[2], pd[3]));
+                        pixel_collector.add_pixel_raw(x, y, (pd[0], pd[1], pd[2], Some(pd[3])));
                     }
                 }
 
-                tx.send((frame_number, pixel_collector.as_bytes()))
+                tx.send((frame_number, pixel_collector.into_bytes()))
             });
             frame_number += 1;
 
-            while active_threads >= 16 {
-                let (frame_num, (actual_size, frame)) = rx.recv().unwrap();
-                let overwrite = frames.get_mut(frame_num).unwrap();
-                uncompressed_bytes += actual_size;
-                let len = frame.len();
-                out_bytes += frame.len();
-                *overwrite = frame;
-                active_threads -= 1;
-                println!("Finished frame {}. Ratio: {}", frame_num, (actual_size as f64)/(len as f64));
-            }
+            take_frame!(15);
         }
 
-        while active_threads > 0 {
-            let (frame_num, (actual_size, frame)) = rx.recv().unwrap();
-            let overwrite = frames.get_mut(frame_num).unwrap();
-            uncompressed_bytes += actual_size;
-            out_bytes += frame.len();
-            *overwrite = frame;
-            active_threads -= 1;
-        }
+        take_frame!(0);
 
         println!(
-            "Bytes read: {}, Bytes out: {}, ratio: {}",
+            "Bytes read: {}, Bytes out: {}, ratio: {:.02}",
             uncompressed_bytes,
             out_bytes,
             (uncompressed_bytes as f64) / (out_bytes as f64)
@@ -151,7 +154,6 @@ where
                     std::thread::sleep(self.frame_time - frame_duration);
                 }
             }
-            break;
         }
     }
 }

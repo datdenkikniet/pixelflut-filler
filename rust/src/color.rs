@@ -2,11 +2,37 @@ use std::{fmt::LowerHex, str::FromStr};
 
 use rand::{thread_rng, RngCore};
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
     pub a: Option<u8>,
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        Self {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: Some(0xFF),
+        }
+    }
+}
+
+impl Color {
+    pub fn from_rgba(r: u8, g: u8, b: u8, a: Option<u8>) -> Self {
+        Self { r, g, b, a }
+    }
+
+    pub fn copy_from(&mut self, other: &Color) {
+        let Color { r, g, b, a } = *other;
+        self.r = r;
+        self.g = g;
+        self.b = b;
+        self.a = a;
+    }
 }
 
 impl LowerHex for Color {
@@ -59,7 +85,7 @@ impl FromStr for Color {
             r: (digits[0] + digits[1] * 16) as u8,
             g: (digits[2] + digits[3] * 16) as u8,
             b: (digits[4] + digits[5] * 16) as u8,
-            a: None,
+            a: Some(0xFF),
         };
 
         if len == 8 {

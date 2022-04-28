@@ -5,7 +5,7 @@ use zstd::{
     zstd_safe::{InBuffer, OutBuffer},
 };
 
-use crate::{canvas::Pixel, color::Color};
+use crate::color::Color;
 
 enum PixelCollectorKind {
     Binary,
@@ -52,88 +52,97 @@ impl CompressionKind {
 }
 
 pub struct PixelCollector {
-    data: Vec<u8>,
     kind: PixelCollectorKind,
     compression_kind: Option<CompressionKind>,
+    pixels: Vec<(u16, u16, Color)>,
 }
 
 impl PixelCollector {
     pub fn new_binary(compression_kind: Option<CompressionKind>) -> Self {
         Self {
-            data: Vec::new(),
             kind: PixelCollectorKind::Binary,
             compression_kind,
+            pixels: Vec::new(),
         }
     }
 
     pub fn new_text(compression_kind: Option<CompressionKind>) -> Self {
         Self {
-            data: Vec::new(),
             kind: PixelCollectorKind::Text,
             compression_kind,
+            pixels: Vec::new(),
         }
     }
 
-    #[allow(unused)]
-    pub fn add_colored_pixel(&mut self, x: u16, y: u16, color: Color) {
-        let alpha = if let Some(alpha) = color.a {
-            alpha
-        } else {
-            0xFF
-        };
-        self.add_pixel_raw(x, y, (color.r, color.g, color.b, alpha));
-    }
+    pub fn add_pixel_colored(&mut self, x: u16, y: u16, color: &Color) {
+        let Color { a, .. } = color;
 
-    #[allow(unused)]
-    pub fn add_pixel(&mut self, x: u16, y: u16, pixel: Pixel) {
-        self.add_pixel_raw(x, y, (pixel.r, pixel.g, pixel.b, pixel.a))
-    }
-
-    pub fn add_pixel_raw(&mut self, x: u16, y: u16, pixel_data: (u8, u8, u8, u8)) {
-        let (r, g, b, a) = pixel_data;
-
-        match self.kind {
-            PixelCollectorKind::Binary => {
-                let data = &mut self.data;
-                data.extend_from_slice(b"PB");
-
-                x.to_le_bytes().iter().for_each(|b| data.push(*b));
-                y.to_le_bytes().iter().for_each(|b| data.push(*b));
-
-                data.push(r);
-                data.push(g);
-                data.push(b);
-                data.push(a);
-            }
-            PixelCollectorKind::Text => {
-                self.data.extend_from_slice(
-                    format!("PX {} {} {:02X}{:02X}{:02X}{:02X}\n", x, y, r, g, b, a).as_bytes(),
-                );
-            }
+        if a.is_none() || a == &Some(0) {
+            return;
         }
+
+        self.pixels.push((x, y, *color));
     }
 
-    fn compress_zstd(self) -> (usize, Vec<u8>) {
-        let in_buffer = &mut InBuffer::around(&self.data);
-        let out = &mut vec![0u8; self.data.len() + 1024];
+    pub fn add_pixel_raw(&mut self, x: u16, y: u16, color_data: (u8, u8, u8, Option<u8>)) {
+        let (r, g, b, a) = color_data;
+        self.add_pixel_colored(x, y, &Color::from_rgba(r, g, b, a))
+    }
+
+    fn compress_zstd(in_data: Vec<u8>) -> (usize, Vec<u8>) {
+        let in_buffer = &mut InBuffer::around(&in_data);
+        let out = &mut vec![0u8; in_data.len() + 1024];
         let out_buffer = &mut OutBuffer::around(out);
         let mut encoder = Encoder::new(1).unwrap();
 
-        encoder.run(in_buffer, out_buffer).ok();
-        encoder.finish(out_buffer, true).ok();
+        encoder.run(in_buffer, out_buffer).unwrap();
+        encoder.finish(out_buffer, true).unwrap();
 
-        let len = out_buffer.pos();
-        let data = out.into_iter().take(len).map(|v| *v).collect();
+        let data = out_buffer.as_slice().iter().map(|v| *v).collect();
 
-        (self.data.len(), data)
+        (in_data.len(), data)
     }
 
-    pub fn as_bytes(self) -> (usize, Vec<u8>) {
+    pub fn into_bytes(mut self) -> (usize, Vec<u8>) {
+        self.pixels.sort_unstable_by(|c1, c2| c1.2.cmp(&c2.2));
+
+        let mut data = Vec::with_capacity(self.pixels.len() * 4);
+
+        for (x, y, color) in self.pixels.iter() {
+            match self.kind {
+                PixelCollectorKind::Binary => {
+                    data.extend_from_slice(b"PB");
+
+                    x.to_le_bytes().iter().for_each(|b| data.push(*b));
+                    y.to_le_bytes().iter().for_each(|b| data.push(*b));
+
+                    data.push(color.r);
+                    data.push(color.g);
+                    data.push(color.b);
+                    data.push(color.a.unwrap_or(0xFF));
+                }
+                PixelCollectorKind::Text => {
+                    data.extend_from_slice(
+                        format!(
+                            "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
+                            x,
+                            y,
+                            color.r,
+                            color.g,
+                            color.b,
+                            color.a.unwrap_or(0xFF)
+                        )
+                        .as_bytes(),
+                    );
+                }
+            }
+        }
+
         match self.compression_kind {
             Some(comp) => match comp {
-                CompressionKind::Zstd => self.compress_zstd(),
+                CompressionKind::Zstd => Self::compress_zstd(data),
             },
-            None => (self.data.len(), self.data),
+            None => (data.len(), data),
         }
     }
 }

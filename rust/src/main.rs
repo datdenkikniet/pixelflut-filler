@@ -15,6 +15,7 @@ mod pixelcollector;
 mod snake;
 mod window;
 
+use crate::image::Image;
 use crate::{codec::CodecOptions, gif::Gif};
 use color::Color;
 
@@ -77,10 +78,10 @@ struct Opt {
 enum Command {
     /// Fill the screen with a specific color
     Fill { color: Option<Color> },
-    /// Write some text to the screen
-    Write(WriteCommand),
     /// Send a gif, repeatedly
     Gif(GifCommand),
+    /// Put an image on the screen
+    Image(ImageCommand),
     /// Create a snake that wiggles along the screen
     Snake,
 }
@@ -130,9 +131,28 @@ struct GifCommand {
     width_offset: usize,
 }
 
+#[derive(StructOpt)]
+struct ImageCommand {
+    /// The file name of the image to send
+    file_name: PathBuf,
+
+    /// The width offset from the left. Use negative value to offset from the right
+    #[structopt(long, short, default_value = "0")]
+    width_offset: i32,
+
+    /// The height offset from the top. Use a negative value to offset from the bottom
+    #[structopt(long, short, default_value = "0")]
+    height_offset: i32,
+
+    /// Send the image continuously, at the given interval in milliseconds
+    #[structopt(long, short)]
+    frame_interval: Option<u64>,
+}
+
 enum DataProducers {
     Gif(Gif),
     Fill(Fill),
+    Image(Image),
     Snake(Snake),
 }
 
@@ -142,14 +162,16 @@ impl DataProducer for DataProducers {
             DataProducers::Gif(gif) => gif.do_setup(data),
             DataProducers::Fill(fill) => fill.do_setup(data),
             DataProducers::Snake(snake) => snake.do_setup(data),
+            DataProducers::Image(image) => image.do_setup(data),
         }
     }
 
-    fn get_next_data(&mut self) -> Result<(Vec<u8>, Duration), RunError> {
+    fn get_next_data(&mut self) -> Result<(Vec<u8>, Option<Duration>), RunError> {
         match self {
             DataProducers::Gif(gif) => gif.get_next_data(),
             DataProducers::Fill(fill) => fill.get_next_data(),
             DataProducers::Snake(snake) => snake.get_next_data(),
+            DataProducers::Image(image) => image.get_next_data(),
         }
     }
 }
@@ -172,7 +194,12 @@ fn main() -> Result<(), Error> {
             DataProducers::Fill(Fill::new(color.unwrap_or(Color::random()), opt.noisy))
         }
         Command::Snake => DataProducers::Snake(Snake::new()),
-        _ => todo!(),
+        Command::Image(command) => DataProducers::Image(Image::new(
+            command.file_name,
+            command.frame_interval.map(|d| Duration::from_millis(d)),
+            command.width_offset,
+            command.height_offset,
+        )),
     };
 
     let codec = Codec::new(

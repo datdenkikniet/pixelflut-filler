@@ -127,9 +127,9 @@ impl DataProducer for Gif {
         Ok(())
     }
 
-    fn get_next_data(&mut self) -> Result<(Vec<u8>, Duration), crate::codec::RunError> {
+    fn get_next_data(&mut self) -> Result<(Vec<u8>, Option<Duration>), crate::codec::RunError> {
         self.frame_num = (self.frame_num + 1) % self.frames.len();
         let frame = &self.frames[self.frame_num];
-        Ok((frame.clone(), self.frame_time))
+        Ok((frame.clone(), Some(self.frame_time)))
     }
 }

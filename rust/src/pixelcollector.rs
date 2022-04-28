@@ -55,27 +55,27 @@ pub struct PixelCollector {
     kind: PixelCollectorKind,
     compression_kind: Option<CompressionKind>,
     pixels: Vec<(u16, u16, Color)>,
+    max_x: usize,
+    max_y: usize,
 }
 
 impl From<CodecData> for PixelCollector {
     fn from(codec: CodecData) -> Self {
-        Self::new(&codec.options.compression_kind, codec.options.binary_px)
-    }
-}
-
-impl PixelCollector {
-    pub fn new(compression_kind: &Option<CompressionKind>, binary: bool) -> Self {
         Self {
-            kind: if binary {
+            kind: if codec.options.binary_px {
                 PixelCollectorKind::Binary
             } else {
                 PixelCollectorKind::Text
             },
-            compression_kind: compression_kind.clone(),
+            compression_kind: codec.options.compression_kind.clone(),
             pixels: Vec::new(),
+            max_x: codec.window.get_x(),
+            max_y: codec.window.get_y(),
         }
     }
+}
 
+impl PixelCollector {
     pub fn add_pixel_colored(&mut self, x: u16, y: u16, color: &Color) {
         let Color { a, .. } = color;
 
@@ -111,31 +111,33 @@ impl PixelCollector {
         let mut data = Vec::with_capacity(self.pixels.len() * 4);
 
         for (x, y, color) in self.pixels.iter() {
-            match self.kind {
-                PixelCollectorKind::Binary => {
-                    data.extend_from_slice(b"PB");
+            if (*x as usize) < self.max_x && (*y as usize) < self.max_y {
+                match self.kind {
+                    PixelCollectorKind::Binary => {
+                        data.extend_from_slice(b"PB");
 
-                    x.to_le_bytes().iter().for_each(|b| data.push(*b));
-                    y.to_le_bytes().iter().for_each(|b| data.push(*b));
+                        x.to_le_bytes().iter().for_each(|b| data.push(*b));
+                        y.to_le_bytes().iter().for_each(|b| data.push(*b));
 
-                    data.push(color.r);
-                    data.push(color.g);
-                    data.push(color.b);
-                    data.push(color.a.unwrap_or(0xFF));
-                }
-                PixelCollectorKind::Text => {
-                    data.extend_from_slice(
-                        format!(
-                            "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
-                            x,
-                            y,
-                            color.r,
-                            color.g,
-                            color.b,
-                            color.a.unwrap_or(0xFF)
-                        )
-                        .as_bytes(),
-                    );
+                        data.push(color.r);
+                        data.push(color.g);
+                        data.push(color.b);
+                        data.push(color.a.unwrap_or(0xFF));
+                    }
+                    PixelCollectorKind::Text => {
+                        data.extend_from_slice(
+                            format!(
+                                "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
+                                x,
+                                y,
+                                color.r,
+                                color.g,
+                                color.b,
+                                color.a.unwrap_or(0xFF)
+                            )
+                            .as_bytes(),
+                        );
+                    }
                 }
             }
         }

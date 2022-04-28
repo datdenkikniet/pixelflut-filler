@@ -54,12 +54,7 @@ impl DataProducer for Fill {
         Ok(())
     }
 
-    fn get_next_data(&mut self) -> Result<(Vec<u8>, Duration), RunError> {
-        if !self.sent {
-            self.sent = true;
-            Ok((self.data.clone(), Duration::from_secs(0)))
-        } else {
-            Err(RunError::ClientDataFinished)
-        }
+    fn get_next_data(&mut self) -> Result<(Vec<u8>, Option<Duration>), RunError> {
+        Ok((self.data.clone(), None))
     }
 }

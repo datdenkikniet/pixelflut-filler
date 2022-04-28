@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    codec::{CodecData, DataProducer},
+    codec::{CodecData, DataProducer, RunError},
     color::Color,
     pixelcollector::PixelCollector,
 };
@@ -98,7 +98,7 @@ impl DataProducer for Snake {
         Ok(())
     }
 
-    fn get_next_data(&mut self) -> Result<(Vec<u8>, std::time::Duration), crate::codec::RunError> {
+    fn get_next_data(&mut self) -> Result<(Vec<u8>, Option<Duration>), RunError> {
         let tail = (self.x, self.y);
         self.advance();
 
@@ -124,6 +124,6 @@ impl DataProducer for Snake {
 
         let (_bytes, data) = pixel_collector.into_bytes();
 
-        Ok((data, Duration::from_millis(1)))
+        Ok((data, Some(Duration::from_millis(1))))
     }
 }

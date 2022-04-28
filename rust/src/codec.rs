@@ -45,7 +45,7 @@ pub struct CodecData {
 
 pub trait DataProducer {
     fn do_setup(&mut self, codec: &CodecData) -> Result<(), String>;
-    fn get_next_data(&mut self) -> Result<(Vec<u8>, Duration), RunError>;
+    fn get_next_data(&mut self) -> Result<(Vec<u8>, Option<Duration>), RunError>;
 }
 
 pub struct Codec<T, D>
@@ -151,9 +151,13 @@ where
 
             let send_duration = Instant::now().duration_since(start);
 
-            if next_data > send_duration {
-                let sleep_duration = next_data - send_duration;
-                std::thread::sleep(sleep_duration);
+            if let Some(next_data) = next_data {
+                if next_data > send_duration {
+                    let sleep_duration = next_data - send_duration;
+                    std::thread::sleep(sleep_duration);
+                }
+            } else {
+                break Ok(());
             }
         }
     }

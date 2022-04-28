@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Window {
     pub x_width: usize,
     pub y_height: usize,

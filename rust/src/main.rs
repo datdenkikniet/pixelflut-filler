@@ -1,3 +1,4 @@
+use pixelcollector::CompressionKind;
 use rand::{thread_rng, RngCore};
 use snake::Snake;
 use std::{
@@ -56,6 +57,10 @@ struct Opt {
     /// Use the binary protocol
     #[structopt(short = "b", long)]
     use_binary_protocol: bool,
+
+    /// What type of compression to use
+    #[structopt(short, long)]
+    compression: Option<CompressionKind>,
 
     /// The command to execute
     #[structopt(subcommand)]
@@ -137,7 +142,7 @@ fn main() -> Result<(), Error> {
     match opt.command {
         Command::Fill { color } => fill_canvas(canvas, opt.noisy, color, opt.use_binary_protocol),
         Command::Write(write) => write_text(canvas, opt.noisy, write, opt.use_binary_protocol)?,
-        Command::Gif(gif) => send_gif_loop(canvas, gif, opt.use_binary_protocol),
+        Command::Gif(gif) => send_gif_loop(canvas, gif, opt.use_binary_protocol, opt.compression),
         Command::Snake => snake(canvas),
     }
 
@@ -224,8 +229,12 @@ where
     Ok(())
 }
 
-fn send_gif_loop<T>(canvas: Canvas<T>, gif: GifCommand, use_binary_protocol: bool)
-where
+fn send_gif_loop<T>(
+    canvas: Canvas<T>,
+    gif: GifCommand,
+    use_binary_protocol: bool,
+    compression: Option<CompressionKind>,
+) where
     T: Read + Write,
 {
     let frame_time = Duration::from_micros(gif.frame_time);
@@ -237,6 +246,7 @@ where
         gif.width_offset,
         gif.height_offset,
         use_binary_protocol,
+        compression,
     );
     gif.send_continuous();
 }

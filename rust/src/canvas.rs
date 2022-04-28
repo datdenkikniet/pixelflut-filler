@@ -114,9 +114,9 @@ where
 
     pub fn send_data(&mut self, binary: bool) {
         let mut pixels = if binary {
-            PixelCollector::new_binary()
+            PixelCollector::new_binary(None)
         } else {
-            PixelCollector::new_text()
+            PixelCollector::new_text(None)
         };
         for x in 0..self.window.get_x() - 1 {
             for y in 0..self.window.get_y() - 1 {
@@ -124,7 +124,7 @@ where
                 pixels.add_pixel_raw(x as u16, y as u16, (pixel.r, pixel.g, pixel.b, pixel.a));
             }
         }
-        self.window.get_stream().write(&pixels.as_bytes()).ok();
+        self.window.get_stream().write(&pixels.as_bytes().1).ok();
     }
 
     pub fn send_data_noisy(&mut self, use_binary_protocol: bool) {
@@ -139,9 +139,9 @@ where
         position_list.shuffle(&mut thread_rng());
 
         let mut pixel_collector = if use_binary_protocol {
-            PixelCollector::new_binary()
+            PixelCollector::new_binary(None)
         } else {
-            PixelCollector::new_text()
+            PixelCollector::new_text(None)
         };
 
         for position in position_list {
@@ -153,7 +153,7 @@ where
 
         self.window
             .get_stream()
-            .write(&pixel_collector.as_bytes())
+            .write(&pixel_collector.as_bytes().1)
             .ok();
     }
 

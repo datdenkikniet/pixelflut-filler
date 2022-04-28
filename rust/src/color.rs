@@ -25,14 +25,6 @@ impl Color {
     pub fn from_rgba(r: u8, g: u8, b: u8, a: Option<u8>) -> Self {
         Self { r, g, b, a }
     }
-
-    pub fn copy_from(&mut self, other: &Color) {
-        let Color { r, g, b, a } = *other;
-        self.r = r;
-        self.g = g;
-        self.b = b;
-        self.a = a;
-    }
 }
 
 impl LowerHex for Color {

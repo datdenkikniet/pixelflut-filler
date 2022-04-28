@@ -1,39 +1,45 @@
+use codec::{Codec, CodecData, DataProducer, RunError, SetupError};
+use fill::Fill;
 use pixelcollector::CompressionKind;
-use rand::{thread_rng, RngCore};
 use snake::Snake;
-use std::{
-    io::{Read, Write},
-    net::TcpStream,
-    path::PathBuf,
-    time::Duration,
-};
+use std::{net::TcpStream, path::PathBuf, time::Duration};
 use structopt::StructOpt;
 
+mod codec;
 mod color;
+mod fill;
+mod gif;
+mod image;
+mod letters;
 mod pixelcollector;
 mod snake;
+mod window;
+
+use crate::{codec::CodecOptions, gif::Gif};
 use color::Color;
 
-mod window;
-use window::Window;
-
-mod letters;
-
-use crate::{canvas::Canvas, letters::*};
-
-mod canvas;
-mod gif;
-
 #[derive(Debug)]
-pub enum Error {
-    IoError(std::io::Error),
-    SizeParseError(String),
-    OptionError(String),
+enum Error {
+    Io(std::io::Error),
+    SetupError(SetupError),
+    RunError(RunError),
+}
+
+impl From<SetupError> for Error {
+    fn from(e: SetupError) -> Self {
+        Self::SetupError(e)
+    }
+}
+
+impl From<RunError> for Error {
+    fn from(e: RunError) -> Self {
+        Self::RunError(e)
+    }
 }
 
 impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error::IoError(err)
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
     }
 }
 
@@ -124,6 +130,30 @@ struct GifCommand {
     width_offset: usize,
 }
 
+enum DataProducers {
+    Gif(Gif),
+    Fill(Fill),
+    Snake(Snake),
+}
+
+impl DataProducer for DataProducers {
+    fn do_setup(&mut self, data: &CodecData) -> Result<(), String> {
+        match self {
+            DataProducers::Gif(gif) => gif.do_setup(data),
+            DataProducers::Fill(fill) => fill.do_setup(data),
+            DataProducers::Snake(snake) => snake.do_setup(data),
+        }
+    }
+
+    fn get_next_data(&mut self) -> Result<(Vec<u8>, Duration), RunError> {
+        match self {
+            DataProducers::Gif(gif) => gif.get_next_data(),
+            DataProducers::Fill(fill) => fill.get_next_data(),
+            DataProducers::Snake(snake) => snake.get_next_data(),
+        }
+    }
+}
+
 fn main() -> Result<(), Error> {
     let opt = Opt::from_args();
 
@@ -131,131 +161,38 @@ fn main() -> Result<(), Error> {
 
     let stream = TcpStream::connect(format!("{}:1337", remote))?;
 
-    let canvas: Canvas<_> = Window::from_stream(stream)?.into();
+    let data_producer = match opt.command {
+        Command::Gif(gif) => DataProducers::Gif(Gif::new(
+            gif.file_name,
+            Duration::from_micros(gif.frame_time),
+            gif.width_offset,
+            gif.height_offset,
+        )),
+        Command::Fill { color } => {
+            DataProducers::Fill(Fill::new(color.unwrap_or(Color::random()), opt.noisy))
+        }
+        Command::Snake => DataProducers::Snake(Snake::new()),
+        _ => todo!(),
+    };
+
+    let codec = Codec::new(
+        stream,
+        data_producer,
+        CodecOptions {
+            compression_kind: opt.compression,
+            binary_px: opt.use_binary_protocol,
+        },
+    )?;
 
     println!(
         "Detect screen with dimensions x: {}, y: {}",
-        canvas.get_window().get_x(),
-        canvas.get_window().get_y()
+        codec.data().window.get_x(),
+        codec.data().window.get_y()
     );
 
-    match opt.command {
-        Command::Fill { color } => fill_canvas(canvas, opt.noisy, color, opt.use_binary_protocol),
-        Command::Write(write) => write_text(canvas, opt.noisy, write, opt.use_binary_protocol)?,
-        Command::Gif(gif) => send_gif_loop(canvas, gif, opt.use_binary_protocol, opt.compression),
-        Command::Snake => snake(canvas),
-    }
+    let res = codec.run();
+    std::thread::sleep(Duration::from_secs(1));
 
+    res?;
     Ok(())
-}
-
-fn fill_canvas<T>(mut canvas: Canvas<T>, noisy: bool, color: Option<Color>, use_bin_protocol: bool)
-where
-    T: Read + Write,
-{
-    let fill_color = if let Some(color) = color {
-        color
-    } else {
-        Color::random()
-    };
-
-    println!("Filling with color {:x}", fill_color);
-
-    canvas.fill(&fill_color);
-
-    if noisy {
-        canvas.send_data_noisy(use_bin_protocol);
-    } else {
-        canvas.send_data(use_bin_protocol);
-    }
-
-    canvas.window.get_stream().flush().ok();
-}
-
-fn write_text<T>(
-    mut canvas: Canvas<T>,
-    noisy: bool,
-    write: WriteCommand,
-    use_bin_protocol: bool,
-) -> Result<(), Error>
-where
-    T: Read + Write,
-{
-    let iterations = match (&write.x, &write.y, &write.scale, &write.writes) {
-        (Some(..), Some(..), Some(..), None) => 1,
-        (None, None, None, Some(writes)) => *writes,
-        (None, None, None, None) => 1,
-        (..) => {
-            return Err(Error::OptionError(format!("Valid combinations are: x, y, scale, and not writes, or writes and not x, y, z, and scale")));
-        }
-    };
-
-    let mut offset = 0;
-
-    let letters: LetterString = write.text.as_str().into();
-
-    if let Some(fc) = &write.fill_color {
-        canvas.fill(fc);
-    }
-
-    for _ in 0..iterations {
-        let (x, y, scale) =
-            if let (Some(x), Some(y), Some(scale)) = (&write.x, &write.y, &write.scale) {
-                (*x, *y, *scale)
-            } else {
-                let random_scale = ((thread_rng().next_u32() as usize) % 15) + 5;
-                let random_x = (thread_rng().next_u64() as usize) % canvas.get_window().get_x();
-                let random_y = (thread_rng().next_u64() as usize) % canvas.get_window().get_y();
-                (random_x, random_y, random_scale)
-            };
-
-        letters.iter().for_each(|letter| {
-            let mut random_color = Color::random();
-            random_color.a = Some(0x7F);
-            let color = match &write.color {
-                Some(color) => color,
-                None => &random_color,
-            };
-            canvas.draw_letter(&letter, x + offset, y, color, scale);
-            offset += (1 + LETTER_WIDTH) * scale;
-        });
-    }
-
-    if noisy {
-        canvas.send_data_noisy(use_bin_protocol);
-    } else {
-        canvas.send_data(use_bin_protocol);
-    }
-    Ok(())
-}
-
-fn send_gif_loop<T>(
-    canvas: Canvas<T>,
-    gif: GifCommand,
-    use_binary_protocol: bool,
-    compression: Option<CompressionKind>,
-) where
-    T: Read + Write,
-{
-    let frame_time = Duration::from_micros(gif.frame_time);
-
-    let mut gif = gif::Gif::new_with(
-        canvas,
-        gif.file_name,
-        frame_time,
-        gif.width_offset,
-        gif.height_offset,
-        use_binary_protocol,
-        compression,
-    );
-    gif.send_continuous();
-}
-
-fn snake<T>(canvas: Canvas<T>)
-where
-    T: Read + Write,
-{
-    let snake = Snake::new(canvas);
-
-    snake.run();
 }

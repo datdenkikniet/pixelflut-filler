@@ -5,7 +5,7 @@ use zstd::{
     zstd_safe::{InBuffer, OutBuffer},
 };
 
-use crate::color::Color;
+use crate::{codec::CodecData, color::Color};
 
 enum PixelCollectorKind {
     Binary,
@@ -57,19 +57,21 @@ pub struct PixelCollector {
     pixels: Vec<(u16, u16, Color)>,
 }
 
-impl PixelCollector {
-    pub fn new_binary(compression_kind: Option<CompressionKind>) -> Self {
-        Self {
-            kind: PixelCollectorKind::Binary,
-            compression_kind,
-            pixels: Vec::new(),
-        }
+impl From<CodecData> for PixelCollector {
+    fn from(codec: CodecData) -> Self {
+        Self::new(&codec.options.compression_kind, codec.options.binary_px)
     }
+}
 
-    pub fn new_text(compression_kind: Option<CompressionKind>) -> Self {
+impl PixelCollector {
+    pub fn new(compression_kind: &Option<CompressionKind>, binary: bool) -> Self {
         Self {
-            kind: PixelCollectorKind::Text,
-            compression_kind,
+            kind: if binary {
+                PixelCollectorKind::Binary
+            } else {
+                PixelCollectorKind::Text
+            },
+            compression_kind: compression_kind.clone(),
             pixels: Vec::new(),
         }
     }

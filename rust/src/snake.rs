@@ -1,6 +1,10 @@
-use std::io::{Read, Write};
+use std::time::Duration;
 
-use crate::{canvas::Canvas, color::Color, window::Window};
+use crate::{
+    codec::{CodecData, DataProducer},
+    color::Color,
+    pixelcollector::PixelCollector,
+};
 
 #[derive(Debug)]
 pub struct Velocity {
@@ -14,10 +18,6 @@ impl Velocity {
             direction: 1.0,
             speed,
         }
-    }
-
-    fn set_speed(&mut self, speed: f32) {
-        self.speed = speed;
     }
 
     fn get_delta_p(&self) -> (isize, isize) {
@@ -41,33 +41,23 @@ impl Velocity {
     }
 }
 
-pub struct Snake<T>
-where
-    T: Read + Write,
-{
-    canvas: Canvas<T>,
+pub struct Snake {
     x: isize,
     y: isize,
     direction: Velocity,
     color: Color,
+    codec_data: Option<CodecData>,
 }
 
-impl<T> Snake<T>
-where
-    T: Read + Write,
-{
-    pub fn new(canvas: Canvas<T>) -> Self {
+impl Snake {
+    pub fn new() -> Self {
         Self {
-            canvas,
             x: 0,
             y: 0,
-            direction: Velocity::new(2.5),
+            codec_data: None,
+            direction: Velocity::new(5.),
             color: Color::random(),
         }
-    }
-
-    fn window(&mut self) -> &mut Window<T> {
-        &mut self.canvas.window
     }
 
     fn change_direction(&mut self) {
@@ -81,8 +71,8 @@ where
         self.x += x as isize;
         self.y += y as isize;
 
-        let width = self.window().get_x() as isize;
-        let height = self.window().get_y() as isize;
+        let width = self.codec_data.as_ref().unwrap().window.get_y() as isize;
+        let height = self.codec_data.as_ref().unwrap().window.get_x() as isize;
 
         if self.x >= width {
             self.x = width - 1;
@@ -100,41 +90,40 @@ where
             self.change_direction();
         }
     }
+}
 
-    pub fn run(mut self) {
-        loop {
-            let tail = (self.x, self.y);
-            self.advance();
+impl DataProducer for Snake {
+    fn do_setup(&mut self, codec: &crate::codec::CodecData) -> Result<(), String> {
+        self.codec_data = Some(codec.clone());
+        Ok(())
+    }
 
-            let x_range = if self.x < tail.0 {
-                self.x..tail.0
-            } else {
-                tail.0..self.x
-            };
+    fn get_next_data(&mut self) -> Result<(Vec<u8>, std::time::Duration), crate::codec::RunError> {
+        let tail = (self.x, self.y);
+        self.advance();
 
-            let y_range = if self.y < tail.1 {
-                self.y..tail.1
-            } else {
-                tail.1..self.y
-            };
+        let x_range = if self.x < tail.0 {
+            self.x..tail.0
+        } else {
+            tail.0..self.x
+        };
 
-            let mut data = Vec::new();
+        let y_range = if self.y < tail.1 {
+            self.y..tail.1
+        } else {
+            tail.1..self.y
+        };
 
-            for x in x_range {
-                for y in y_range.clone() {
-                    data.extend_from_slice(b"PB");
+        let mut pixel_collector: PixelCollector = self.codec_data.clone().unwrap().into();
 
-                    (x as u16).to_le_bytes().iter().for_each(|b| data.push(*b));
-                    (y as u16).to_le_bytes().iter().for_each(|b| data.push(*b));
-
-                    data.push(self.color.r);
-                    data.push(self.color.g);
-                    data.push(self.color.b);
-                    data.push(self.color.a.unwrap_or(0xFF));
-                }
+        for x in x_range {
+            for y in y_range.clone() {
+                pixel_collector.add_pixel_colored(x as u16, y as u16, &self.color);
             }
-            self.window().get_stream().write_all(&data).unwrap();
-            // std::thread::sleep(std::time::Duration::from_millis(1));
         }
+
+        let (_bytes, data) = pixel_collector.into_bytes();
+
+        Ok((data, Duration::from_millis(1)))
     }
 }

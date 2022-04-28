@@ -1,41 +1,47 @@
 use std::{
-    io::{Read, Write},
     path::PathBuf,
     sync::mpsc::Receiver,
     time::{Duration, Instant},
 };
 
 use crate::{
-    canvas::Canvas,
-    pixelcollector::{CompressionKind, PixelCollector},
+    codec::{CodecData, DataProducer},
+    pixelcollector::PixelCollector,
 };
 
-pub struct Gif<T>
-where
-    T: Read + Write,
-{
-    canvas: Canvas<T>,
+pub struct Gif {
     frame_time: Duration,
+    height_offset: usize,
+    width_offset: usize,
+    path: PathBuf,
     frames: Vec<Vec<u8>>,
-    compression: Option<CompressionKind>,
+    frame_num: usize,
 }
 
-impl<T> Gif<T>
-where
-    T: Read + Write,
-{
-    pub fn new_with(
-        canvas: Canvas<T>,
+impl Gif {
+    pub fn new(
         path: PathBuf,
         frame_time: Duration,
         width_offset: usize,
         height_offset: usize,
-        use_binary_protocol: bool,
-        compression: Option<CompressionKind>,
     ) -> Self {
-        let mut frames = Vec::new();
+        Self {
+            frame_time,
+            height_offset,
+            width_offset,
+            path,
+            frames: Vec::new(),
+            frame_num: 0,
+        }
+    }
+}
 
-        let file = std::fs::File::open(path).unwrap();
+impl DataProducer for Gif {
+    fn do_setup(&mut self, data: &CodecData) -> Result<(), String> {
+        let width_offset = self.width_offset;
+        let height_offset = self.height_offset;
+
+        let file = std::fs::File::open(self.path.as_path()).unwrap();
         let mut decoder = gif::DecodeOptions::new();
         decoder.set_color_output(gif::ColorOutput::RGBA);
 
@@ -55,7 +61,7 @@ where
             ($max: literal) => {
                 while active_threads > $max {
                     let (frame_num, (actual_size, frame)) = rx.recv().unwrap();
-                    let overwrite = frames.get_mut(frame_num).unwrap();
+                    let overwrite = self.frames.get_mut(frame_num).unwrap();
                     uncompressed_bytes += actual_size;
                     let len = frame.len();
                     out_bytes += frame.len();
@@ -71,19 +77,15 @@ where
         }
 
         while let Some(frame) = decoder.read_next_frame().unwrap() {
-            frames.push(Vec::new());
+            self.frames.push(Vec::new());
             let frame = frame.clone();
 
             active_threads += 1;
 
             let tx = tx.clone();
-            let compression = compression.clone();
+            let data = data.clone();
             std::thread::spawn(move || {
-                let mut pixel_collector = if use_binary_protocol {
-                    PixelCollector::new_binary(compression)
-                } else {
-                    PixelCollector::new_text(compression)
-                };
+                let mut pixel_collector: PixelCollector = data.into();
 
                 let width = frame.width as usize;
                 let height = frame.height as usize;
@@ -122,38 +124,12 @@ where
         );
 
         println!("Done reading");
-        Self {
-            frames,
-            frame_time,
-            canvas,
-            compression,
-        }
+        Ok(())
     }
 
-    pub fn send_continuous(&mut self) {
-        let stream = self.canvas.window.get_stream();
-
-        if let Some(compression) = self.compression {
-            stream.write(&compression.compression_string()).unwrap();
-
-            let mut compress = [0u8; 9];
-            stream.read_exact(&mut compress).ok();
-            println!("{}", std::str::from_utf8(&compress).unwrap().trim());
-        }
-
-        loop {
-            let frames = self.frames.iter();
-            for frame in frames {
-                let start_time = Instant::now();
-                stream.write(frame).unwrap();
-
-                let end_time = Instant::now();
-
-                let frame_duration = end_time - start_time;
-                if frame_duration < self.frame_time {
-                    std::thread::sleep(self.frame_time - frame_duration);
-                }
-            }
-        }
+    fn get_next_data(&mut self) -> Result<(Vec<u8>, Duration), crate::codec::RunError> {
+        self.frame_num = (self.frame_num + 1) % self.frames.len();
+        let frame = &self.frames[self.frame_num];
+        Ok((frame.clone(), self.frame_time))
     }
 }

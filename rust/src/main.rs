@@ -123,12 +123,12 @@ struct GifCommand {
     /// The target frame time (in milliseconds)
     #[structopt(long, short, default_value = "150")]
     frame_time: u64,
-    // Height offset
+    // Height offset from the top. Use negative value to offset from the bottom
     #[structopt(long, short, default_value = "0")]
-    height_offset: usize,
-    // Width offset
+    height_offset: i32,
+    // Width offset from the left. Use negative value to offset from the right
     #[structopt(long, short, default_value = "0")]
-    width_offset: usize,
+    width_offset: i32,
 }
 
 #[derive(StructOpt)]

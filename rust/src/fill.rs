@@ -46,7 +46,7 @@ impl DataProducer for Fill {
 
         let mut pixel_collector: PixelCollector = codec.clone().into();
         for (x, y) in position_list {
-            pixel_collector.add_pixel_colored(x as u16, y as u16, &self.color);
+            pixel_collector.add_pixel_colored(x as i32, y as i32, &self.color);
         }
 
         self.data = pixel_collector.into_bytes().1;

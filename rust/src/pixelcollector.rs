@@ -51,12 +51,40 @@ impl CompressionKind {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PixOffset {
+    pub x_max: i32,
+    pub x_offset: i32,
+    pub y_max: i32,
+    pub y_offset: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+impl PixOffset {
+    pub fn do_offset(&self, x: i32, y: i32) -> (i32, i32) {
+        let x_offset = if self.x_offset >= 0 {
+            self.x_offset
+        } else {
+            self.x_max as i32 + self.x_offset - self.width as i32
+        };
+
+        let y_offset = if self.y_offset >= 0 {
+            self.y_offset
+        } else {
+            self.y_max as i32 + self.y_offset - self.height as i32
+        };
+
+        (x + x_offset, y + y_offset)
+    }
+}
+
 pub struct PixelCollector {
     kind: PixelCollectorKind,
     compression_kind: Option<CompressionKind>,
     pixels: Vec<(u16, u16, Color)>,
-    max_x: usize,
-    max_y: usize,
+    max_x: i32,
+    max_y: i32,
 }
 
 impl From<CodecData> for PixelCollector {
@@ -69,26 +97,23 @@ impl From<CodecData> for PixelCollector {
             },
             compression_kind: codec.options.compression_kind.clone(),
             pixels: Vec::new(),
-            max_x: codec.window.get_x(),
-            max_y: codec.window.get_y(),
+            max_x: codec.window.get_x() as i32,
+            max_y: codec.window.get_y() as i32,
         }
     }
 }
 
 impl PixelCollector {
-    pub fn add_pixel_colored(&mut self, x: u16, y: u16, color: &Color) {
+    pub fn add_pixel_colored(&mut self, x: i32, y: i32, color: &Color) {
         let Color { a, .. } = color;
 
         if a.is_none() || a == &Some(0) {
             return;
         }
 
-        self.pixels.push((x, y, *color));
-    }
-
-    pub fn add_pixel_raw(&mut self, x: u16, y: u16, color_data: (u8, u8, u8, Option<u8>)) {
-        let (r, g, b, a) = color_data;
-        self.add_pixel_colored(x, y, &Color::from_rgba(r, g, b, a))
+        if x >= 0 && x < self.max_x && y >= 0 && y < self.max_y {
+            self.pixels.push((x as u16, y as u16, *color));
+        }
     }
 
     fn compress_zstd(in_data: Vec<u8>) -> (usize, Vec<u8>) {
@@ -111,33 +136,31 @@ impl PixelCollector {
         let mut data = Vec::with_capacity(self.pixels.len() * 4);
 
         for (x, y, color) in self.pixels.iter() {
-            if (*x as usize) < self.max_x && (*y as usize) < self.max_y {
-                match self.kind {
-                    PixelCollectorKind::Binary => {
-                        data.extend_from_slice(b"PB");
+            match self.kind {
+                PixelCollectorKind::Binary => {
+                    data.extend_from_slice(b"PB");
 
-                        x.to_le_bytes().iter().for_each(|b| data.push(*b));
-                        y.to_le_bytes().iter().for_each(|b| data.push(*b));
+                    x.to_le_bytes().iter().for_each(|b| data.push(*b));
+                    y.to_le_bytes().iter().for_each(|b| data.push(*b));
 
-                        data.push(color.r);
-                        data.push(color.g);
-                        data.push(color.b);
-                        data.push(color.a.unwrap_or(0xFF));
-                    }
-                    PixelCollectorKind::Text => {
-                        data.extend_from_slice(
-                            format!(
-                                "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
-                                x,
-                                y,
-                                color.r,
-                                color.g,
-                                color.b,
-                                color.a.unwrap_or(0xFF)
-                            )
-                            .as_bytes(),
-                        );
-                    }
+                    data.push(color.r);
+                    data.push(color.g);
+                    data.push(color.b);
+                    data.push(color.a.unwrap_or(0xFF));
+                }
+                PixelCollectorKind::Text => {
+                    data.extend_from_slice(
+                        format!(
+                            "PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
+                            x,
+                            y,
+                            color.r,
+                            color.g,
+                            color.b,
+                            color.a.unwrap_or(0xFF)
+                        )
+                        .as_bytes(),
+                    );
                 }
             }
         }

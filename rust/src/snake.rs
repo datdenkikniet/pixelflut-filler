@@ -118,7 +118,7 @@ impl DataProducer for Snake {
 
         for x in x_range {
             for y in y_range.clone() {
-                pixel_collector.add_pixel_colored(x as u16, y as u16, &self.color);
+                pixel_collector.add_pixel_colored(x as i32, y as i32, &self.color);
             }
         }
 

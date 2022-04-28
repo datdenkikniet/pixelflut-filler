@@ -1,30 +1,25 @@
 use std::{
     path::PathBuf,
-    sync::mpsc::Receiver,
     time::{Duration, Instant},
 };
 
 use crate::{
     codec::{CodecData, DataProducer},
-    pixelcollector::PixelCollector,
+    color::Color,
+    pixelcollector::{PixOffset, PixelCollector},
 };
 
 pub struct Gif {
     frame_time: Duration,
-    height_offset: usize,
-    width_offset: usize,
+    height_offset: i32,
+    width_offset: i32,
     path: PathBuf,
     frames: Vec<Vec<u8>>,
     frame_num: usize,
 }
 
 impl Gif {
-    pub fn new(
-        path: PathBuf,
-        frame_time: Duration,
-        width_offset: usize,
-        height_offset: usize,
-    ) -> Self {
+    pub fn new(path: PathBuf, frame_time: Duration, width_offset: i32, height_offset: i32) -> Self {
         Self {
             frame_time,
             height_offset,
@@ -38,9 +33,6 @@ impl Gif {
 
 impl DataProducer for Gif {
     fn do_setup(&mut self, data: &CodecData) -> Result<(), String> {
-        let width_offset = self.width_offset;
-        let height_offset = self.height_offset;
-
         let file = std::fs::File::open(self.path.as_path()).unwrap();
         let mut decoder = gif::DecodeOptions::new();
         decoder.set_color_output(gif::ColorOutput::RGBA);
@@ -48,67 +40,67 @@ impl DataProducer for Gif {
         let mut decoder = decoder.read_info(file).unwrap();
         println!("Reading all frames");
 
-        let mut frame_number = 0;
-        let (tx, rx): (_, Receiver<(usize, (usize, Vec<u8>))>) = std::sync::mpsc::channel();
-
         let start_time = Instant::now();
 
         let mut uncompressed_bytes = 0;
         let mut out_bytes = 0;
-        let mut active_threads = 0;
+        let mut frame_num = 0;
 
-        macro_rules! take_frame {
-            ($max: literal) => {
-                while active_threads > $max {
-                    let (frame_num, (actual_size, frame)) = rx.recv().unwrap();
-                    let overwrite = self.frames.get_mut(frame_num).unwrap();
-                    uncompressed_bytes += actual_size;
-                    let len = frame.len();
-                    out_bytes += frame.len();
-                    *overwrite = frame;
-                    active_threads -= 1;
-                    println!(
-                        "Finished frame {}. Ratio: {:.02}",
-                        frame_num,
-                        (actual_size as f64) / (len as f64)
-                    );
-                }
-            };
-        }
+        let mut width = None;
+        let mut height = None;
 
         while let Some(frame) = decoder.read_next_frame().unwrap() {
-            self.frames.push(Vec::new());
-            let frame = frame.clone();
+            let x_offset = self.width_offset;
+            let y_offset = self.height_offset;
 
-            active_threads += 1;
+            let (x_max, y_max) = (data.window.get_x() as i32, data.window.get_y() as i32);
+            let mut pixel_collector: PixelCollector = data.clone().into();
 
-            let tx = tx.clone();
-            let data = data.clone();
-            std::thread::spawn(move || {
-                let mut pixel_collector: PixelCollector = data.into();
+            // Use the width and height of the first frame for offset calculations
+            let (width, height) = if let (Some(width), Some(height)) = (width, height) {
+                (width, height)
+            } else {
+                width = Some(frame.width as i32);
+                height = Some(frame.height as i32);
+                (frame.width as i32, frame.height as i32)
+            };
 
-                let width = frame.width as usize;
-                let height = frame.height as usize;
+            let pix_offset = PixOffset {
+                x_max,
+                x_offset,
+                y_max,
+                y_offset,
+                width,
+                height,
+            };
 
-                for y in 0..height {
-                    for x in 0..width {
-                        let start_pixel = ((y * width) + x) * 4;
-                        let pd = &frame.buffer[start_pixel..start_pixel + 4];
-                        let x = (x + frame.left as usize + width_offset) as u16;
-                        let y = (y + frame.top as usize + height_offset) as u16;
+            let (width, height) = (frame.width as usize, frame.height as usize);
+            for y in 0..height {
+                for x in 0..width {
+                    let start_pixel = ((y * width) + x) * 4;
+                    let pd = &frame.buffer[start_pixel..start_pixel + 4];
+                    let (x, y) = pix_offset.do_offset(x as i32, y as i32);
 
-                        pixel_collector.add_pixel_raw(x, y, (pd[0], pd[1], pd[2], Some(pd[3])));
-                    }
+                    pixel_collector.add_pixel_colored(
+                        x,
+                        y,
+                        &Color::from_rgba(pd[0], pd[1], pd[2], Some(pd[3])),
+                    );
                 }
+            }
 
-                tx.send((frame_number, pixel_collector.into_bytes()))
-            });
-            frame_number += 1;
-
-            take_frame!(15);
+            let (actual_size, frame) = pixel_collector.into_bytes();
+            let len = frame.len();
+            out_bytes += frame.len();
+            uncompressed_bytes += actual_size;
+            self.frames.push(frame);
+            println!(
+                "Finished frame {}. Ratio: {:.02}",
+                frame_num,
+                (actual_size as f64) / (len as f64)
+            );
+            frame_num += 1;
         }
-
-        take_frame!(0);
 
         println!(
             "Bytes read: {}, Bytes out: {}, ratio: {:.02}",
@@ -119,7 +111,7 @@ impl DataProducer for Gif {
 
         println!(
             "Loaded {} frames in  {} ms",
-            frame_number,
+            frame_num,
             Instant::now().duration_since(start_time).as_millis()
         );
 

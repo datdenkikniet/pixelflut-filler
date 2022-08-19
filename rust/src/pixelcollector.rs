@@ -117,6 +117,7 @@ impl PixelCollector {
     }
 
     fn compress_zstd(in_data: Vec<u8>) -> (usize, Vec<u8>) {
+        let in_len = in_data.len();
         let in_buffer = &mut InBuffer::around(&in_data);
         let out = &mut vec![0u8; in_data.len() + 1024];
         let out_buffer = &mut OutBuffer::around(out);
@@ -125,7 +126,14 @@ impl PixelCollector {
         encoder.run(in_buffer, out_buffer).unwrap();
         encoder.finish(out_buffer, true).unwrap();
 
-        let data = out_buffer.as_slice().iter().map(|v| *v).collect();
+        let data: Vec<u8> = out_buffer.as_slice().iter().map(|v| *v).collect();
+
+        log::debug!(
+            "Compressed {} bytes into {} bytes (Ratio: {:.02}) with ZSTD",
+            in_len,
+            data.len(),
+            (in_len as f64 / data.len() as f64)
+        );
 
         (in_data.len(), data)
     }
@@ -169,7 +177,10 @@ impl PixelCollector {
             Some(comp) => match comp {
                 CompressionKind::Zstd => Self::compress_zstd(data),
             },
-            None => (data.len(), data),
+            None => {
+                log::debug!("Not compressing data");
+                (data.len(), data)
+            }
         }
     }
 }

@@ -177,6 +177,8 @@ impl DataProducer for DataProducers {
 }
 
 fn main() -> Result<(), Error> {
+    pretty_env_logger::init();
+
     let opt = Opt::from_args();
 
     let remote = opt.remote;
@@ -211,7 +213,7 @@ fn main() -> Result<(), Error> {
         },
     )?;
 
-    println!(
+    log::info!(
         "Detect screen with dimensions x: {}, y: {}",
         codec.data().window.get_x(),
         codec.data().window.get_y()

@@ -38,7 +38,7 @@ impl DataProducer for Gif {
         decoder.set_color_output(gif::ColorOutput::RGBA);
 
         let mut decoder = decoder.read_info(file).unwrap();
-        println!("Reading all frames");
+        log::info!("Reading all frames");
 
         let start_time = Instant::now();
 
@@ -94,7 +94,7 @@ impl DataProducer for Gif {
             out_bytes += frame.len();
             uncompressed_bytes += actual_size;
             self.frames.push(frame);
-            println!(
+            log::debug!(
                 "Finished frame {}. Ratio: {:.02}",
                 frame_num,
                 (actual_size as f64) / (len as f64)
@@ -102,20 +102,19 @@ impl DataProducer for Gif {
             frame_num += 1;
         }
 
-        println!(
+        log::info!(
             "Bytes read: {}, Bytes out: {}, ratio: {:.02}",
             uncompressed_bytes,
             out_bytes,
             (uncompressed_bytes as f64) / (out_bytes as f64)
         );
 
-        println!(
+        log::info!(
             "Loaded {} frames in  {} ms",
             frame_num,
             Instant::now().duration_since(start_time).as_millis()
         );
 
-        println!("Done reading");
         Ok(())
     }
 

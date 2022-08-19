@@ -1,9 +1,9 @@
+use clap::Parser;
 use codec::{Codec, CodecData, DataProducer, RunError, SetupError};
 use fill::Fill;
 use pixelcollector::CompressionKind;
 use snake::Snake;
 use std::{net::TcpStream, path::PathBuf, time::Duration};
-use structopt::StructOpt;
 
 mod codec;
 mod color;
@@ -44,108 +44,105 @@ impl From<std::io::Error> for Error {
     }
 }
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[clap(
     name = "pixelflut-filler",
     about = "Fill a pixelflut instance's window"
 )]
 struct Opt {
-    /// Whether or not the data should be
-    /// transmited "noisly" (i.e. with non-linear
-    /// distribution of the coordinates of the sent
-    /// pixels)
-    #[structopt(short)]
-    noisy: bool,
-
     /// The remote to connect to
-    #[structopt(short, default_value = "127.0.0.1")]
+    #[clap(global = true, short, long, default_value = "127.0.0.1")]
     remote: String,
 
     /// Use the binary protocol
-    #[structopt(short = "b", long)]
+    #[clap(global = true, short = 'b', long)]
     use_binary_protocol: bool,
 
     /// What type of compression to use
-    #[structopt(short, long)]
+    #[clap(global = true, short, long)]
     compression: Option<CompressionKind>,
 
     /// The command to execute
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Command,
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 enum Command {
     /// Fill the screen with a specific color
-    Fill { color: Option<Color> },
+    Fill {
+        color: Option<Color>,
+        #[clap(long, short)]
+        noisy: bool,
+    },
     /// Send a gif, repeatedly
     Gif(GifCommand),
     /// Put an image on the screen
     Image(ImageCommand),
+    /// Write some text to the screen
+    Write(WriteCommand),
     /// Create a snake that wiggles along the screen
     Snake,
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct WriteCommand {
     /// How many times to write the text at random coordinates
-    /// and a scaling between 5 and 20 (only valid if 'scale',
-    /// 'x' and 'y' are not set)
-    #[structopt(short)]
-    writes: Option<usize>,
+    #[clap(long, default_value = "1")]
+    count: usize,
     /// The scale at which to draw the text
-    #[structopt(short)]
-    scale: Option<usize>,
+    #[clap(short, default_value = "5")]
+    scale: usize,
     /// The X coordinate to draw the text at
-    #[structopt(short)]
+    #[clap(short)]
     x: Option<usize>,
     /// The Y coordinate to draw the text at
-    #[structopt(short)]
+    #[clap(short)]
     y: Option<usize>,
     /// The color to use when drawing. Defaults
     /// to a random color per letter
-    #[structopt(short)]
-    color: Option<Color>,
+    #[clap(short, default_value = "Color::random")]
+    color: Color,
     /// The text to write
-    #[structopt(default_value = "change me")]
+    #[clap(default_value = "change me")]
     text: String,
     /// Fill the screen with the specified
     /// color before writing the text. Use 'r'
     /// to use a random color.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     fill_color: Option<Color>,
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct GifCommand {
     /// The file name of the GIF to send
     file_name: PathBuf,
     /// The target frame time (in milliseconds)
-    #[structopt(long, short, default_value = "150")]
+    #[clap(long, short, default_value = "150")]
     frame_time: u64,
     // Height offset from the top. Use negative value to offset from the bottom
-    #[structopt(long, short, default_value = "0")]
+    #[clap(long, short, default_value = "0")]
     height_offset: i32,
     // Width offset from the left. Use negative value to offset from the right
-    #[structopt(long, short, default_value = "0")]
+    #[clap(long, short, default_value = "0")]
     width_offset: i32,
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct ImageCommand {
     /// The file name of the image to send
     file_name: PathBuf,
 
     /// The width offset from the left. Use negative value to offset from the right
-    #[structopt(long, short, default_value = "0")]
+    #[clap(long, short, default_value = "0")]
     width_offset: i32,
 
     /// The height offset from the top. Use a negative value to offset from the bottom
-    #[structopt(long, short, default_value = "0")]
+    #[clap(long, short, default_value = "0")]
     height_offset: i32,
 
     /// Send the image continuously, at the given interval in milliseconds
-    #[structopt(long, short)]
+    #[clap(long, short)]
     frame_interval: Option<u64>,
 }
 
@@ -192,8 +189,8 @@ fn main() -> Result<(), Error> {
             gif.width_offset,
             gif.height_offset,
         )),
-        Command::Fill { color } => {
-            DataProducers::Fill(Fill::new(color.unwrap_or(Color::random()), opt.noisy))
+        Command::Fill { color, noisy } => {
+            DataProducers::Fill(Fill::new(color.unwrap_or(Color::random()), noisy))
         }
         Command::Snake => DataProducers::Snake(Snake::new()),
         Command::Image(command) => DataProducers::Image(Image::new(
@@ -202,6 +199,7 @@ fn main() -> Result<(), Error> {
             command.width_offset,
             command.height_offset,
         )),
+        Command::Write(_) => todo!(),
     };
 
     let codec = Codec::new(

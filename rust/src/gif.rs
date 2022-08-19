@@ -34,10 +34,10 @@ impl Gif {
 impl DataProducer for Gif {
     fn do_setup(&mut self, data: &CodecData) -> Result<(), String> {
         let file = std::fs::File::open(self.path.as_path()).unwrap();
-        let mut decoder = gif::DecodeOptions::new();
-        decoder.set_color_output(gif::ColorOutput::RGBA);
+        let mut decoder_opts = gif::DecodeOptions::new();
+        decoder_opts.set_color_output(gif::ColorOutput::RGBA);
 
-        let mut decoder = decoder.read_info(file).unwrap();
+        let mut decoder = decoder_opts.read_info(file).unwrap();
         log::info!("Reading all frames");
 
         let start_time = Instant::now();

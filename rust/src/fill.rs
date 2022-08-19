@@ -11,7 +11,6 @@ use crate::{
 pub struct Fill {
     color: Color,
     data: Vec<u8>,
-    sent: bool,
     noisy: bool,
 }
 
@@ -20,7 +19,6 @@ impl Fill {
         Self {
             color,
             data: Vec::new(),
-            sent: false,
             noisy,
         }
     }

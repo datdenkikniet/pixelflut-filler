@@ -21,7 +21,6 @@ impl From<std::io::Error> for SetupError {
 
 #[derive(Debug)]
 pub enum RunError {
-    ClientDataFinished,
     Io(std::io::Error),
 }
 

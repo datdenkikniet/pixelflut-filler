@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 rand = "0.8.4"
-structopt = "0.3.22"
+clap = {version = "3.2.17", features = [ "derive" ] }
 gif = "0.11.3"
 flate2 = "1.0.23"
 zstd = "0.11.1"
